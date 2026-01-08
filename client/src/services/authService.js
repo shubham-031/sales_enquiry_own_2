@@ -1,31 +1,32 @@
 import api from '../utils/axios';
+import useAuthStore from '../store/authStore';
 
 export const authService = {
   // Login
   login: async (credentials) => {
     const response = await api.post('/auth/login', credentials);
-    if (response.data.token) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-    }
+    // Token is already saved by authService, just return response
     return response.data;
   },
 
   // Register
   register: async (userData) => {
     const response = await api.post('/auth/register', userData);
-    if (response.data.token) {
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
-    }
+    // Token is already saved by authService, just return response
     return response.data;
   },
 
   // Logout
   logout: async () => {
-    await api.get('/auth/logout');
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    try {
+      await api.get('/auth/logout');
+    } catch (error) {
+      console.error('Logout API error:', error);
+    } finally {
+      // Always clear local state even if API call fails
+      const { logout } = useAuthStore.getState();
+      logout();
+    }
   },
 
   // Get current user

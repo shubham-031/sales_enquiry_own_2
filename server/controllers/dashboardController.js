@@ -1,28 +1,59 @@
 import Enquiry from '../models/Enquiry.js';
+import User from '../models/User.js';
 
 // @desc    Get dashboard statistics
 // @route   GET /api/dashboard/stats
 // @access  Private
 export const getDashboardStats = async (req, res, next) => {
   try {
-    const totalEnquiries = await Enquiry.countDocuments();
-    const openEnquiries = await Enquiry.countDocuments({ status: 'Open' });
-    const closedEnquiries = await Enquiry.countDocuments({ status: 'Closed' });
-    const quotedEnquiries = await Enquiry.countDocuments({ activity: 'Quoted' });
-    const regrettedEnquiries = await Enquiry.countDocuments({ activity: 'Regretted' });
+    const { startDate, endDate, role } = req.query;
+    
+    // Build date filter
+    const dateFilter = {};
+    if (startDate || endDate) {
+      dateFilter.enquiryDate = {};
+      if (startDate) dateFilter.enquiryDate.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dateFilter.enquiryDate.$lte = end;
+      }
+    }
+    
+    // Build role filter
+    let roleFilter = {};
+    if (role) {
+      const usersWithRole = await User.find({ role }).select('_id');
+      const userIds = usersWithRole.map(u => u._id);
+      roleFilter.$or = [
+        { salesRepresentative: { $in: userIds } },
+        { rndHandler: { $in: userIds } }
+      ];
+    }
+    
+    const combinedFilter = { ...dateFilter, ...roleFilter };
+    
+    const totalEnquiries = await Enquiry.countDocuments(combinedFilter);
+    const openEnquiries = await Enquiry.countDocuments({ ...combinedFilter, status: 'Open' });
+    const closedEnquiries = await Enquiry.countDocuments({ ...combinedFilter, status: 'Closed' });
+    const quotedEnquiries = await Enquiry.countDocuments({ ...combinedFilter, activity: 'Quoted' });
+    const regrettedEnquiries = await Enquiry.countDocuments({ ...combinedFilter, activity: 'Regretted' });
 
     // Calculate closure rate
     const closureRate = totalEnquiries > 0 ? ((closedEnquiries / totalEnquiries) * 100).toFixed(2) : 0;
 
     // Calculate average fulfillment time
-    const enquiriesWithFulfillment = await Enquiry.find({ fulfillmentTime: { $exists: true, $ne: null } });
+    const enquiriesWithFulfillment = await Enquiry.find({ 
+      ...combinedFilter,
+      fulfillmentTime: { $exists: true, $ne: null } 
+    });
     const avgFulfillmentTime = enquiriesWithFulfillment.length > 0
       ? (enquiriesWithFulfillment.reduce((sum, enq) => sum + enq.fulfillmentTime, 0) / enquiriesWithFulfillment.length).toFixed(2)
       : 0;
 
     // Market distribution
-    const domesticCount = await Enquiry.countDocuments({ marketType: 'Domestic' });
-    const exportCount = await Enquiry.countDocuments({ marketType: 'Export' });
+    const domesticCount = await Enquiry.countDocuments({ ...combinedFilter, marketType: 'Domestic' });
+    const exportCount = await Enquiry.countDocuments({ ...combinedFilter, marketType: 'Export' });
 
     res.status(200).json({
       success: true,
@@ -50,7 +81,35 @@ export const getDashboardStats = async (req, res, next) => {
 // @access  Private
 export const getTeamPerformance = async (req, res, next) => {
   try {
+    const { startDate, endDate, role } = req.query;
+    
+    // Build date filter
+    const dateMatch = {};
+    if (startDate || endDate) {
+      dateMatch.enquiryDate = {};
+      if (startDate) dateMatch.enquiryDate.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dateMatch.enquiryDate.$lte = end;
+      }
+    }
+    
+    // Build role filter
+    let roleMatch = {};
+    if (role) {
+      const usersWithRole = await User.find({ role }).select('_id');
+      const userIds = usersWithRole.map(u => u._id);
+      roleMatch.$or = [
+        { salesRepresentative: { $in: userIds } },
+        { rndHandler: { $in: userIds } }
+      ];
+    }
+    
+    const combinedMatch = { ...dateMatch, ...roleMatch };
+    
     const salesPerformance = await Enquiry.aggregate([
+      ...(Object.keys(combinedMatch).length > 0 ? [{ $match: combinedMatch }] : []),
       {
         $group: {
           _id: '$salesRepName',
@@ -67,7 +126,7 @@ export const getTeamPerformance = async (req, res, next) => {
     ]);
 
     const rndPerformance = await Enquiry.aggregate([
-      { $match: { rndHandlerName: { $exists: true, $ne: null } } },
+      { $match: { rndHandlerName: { $exists: true, $ne: null }, ...combinedMatch } },
       {
         $group: {
           _id: '$rndHandlerName',
@@ -95,7 +154,35 @@ export const getTeamPerformance = async (req, res, next) => {
 // @access  Private
 export const getMarketAnalysis = async (req, res, next) => {
   try {
+    const { startDate, endDate, role } = req.query;
+    
+    // Build date filter
+    const dateMatch = {};
+    if (startDate || endDate) {
+      dateMatch.enquiryDate = {};
+      if (startDate) dateMatch.enquiryDate.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dateMatch.enquiryDate.$lte = end;
+      }
+    }
+    
+    // Build role filter
+    let roleMatch = {};
+    if (role) {
+      const usersWithRole = await User.find({ role }).select('_id');
+      const userIds = usersWithRole.map(u => u._id);
+      roleMatch.$or = [
+        { salesRepresentative: { $in: userIds } },
+        { rndHandler: { $in: userIds } }
+      ];
+    }
+    
+    const combinedMatch = { ...dateMatch, ...roleMatch };
+    
     const marketAnalysis = await Enquiry.aggregate([
+      ...(Object.keys(combinedMatch).length > 0 ? [{ $match: combinedMatch }] : []),
       {
         $group: {
           _id: {
@@ -110,6 +197,7 @@ export const getMarketAnalysis = async (req, res, next) => {
     ]);
 
     const activityByMarket = await Enquiry.aggregate([
+      ...(Object.keys(combinedMatch).length > 0 ? [{ $match: combinedMatch }] : []),
       {
         $group: {
           _id: {
@@ -123,6 +211,7 @@ export const getMarketAnalysis = async (req, res, next) => {
 
     // Top products analysis
     const topProducts = await Enquiry.aggregate([
+      ...(Object.keys(combinedMatch).length > 0 ? [{ $match: combinedMatch }] : []),
       {
         $group: {
           _id: '$productType',
@@ -150,7 +239,35 @@ export const getMarketAnalysis = async (req, res, next) => {
 // @access  Private
 export const getActivityDistribution = async (req, res, next) => {
   try {
+    const { startDate, endDate, role } = req.query;
+    
+    // Build date filter
+    const dateMatch = {};
+    if (startDate || endDate) {
+      dateMatch.enquiryDate = {};
+      if (startDate) dateMatch.enquiryDate.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dateMatch.enquiryDate.$lte = end;
+      }
+    }
+    
+    // Build role filter
+    let roleMatch = {};
+    if (role) {
+      const usersWithRole = await User.find({ role }).select('_id');
+      const userIds = usersWithRole.map(u => u._id);
+      roleMatch.$or = [
+        { salesRepresentative: { $in: userIds } },
+        { rndHandler: { $in: userIds } }
+      ];
+    }
+    
+    const combinedMatch = { ...dateMatch, ...roleMatch };
+    
     const activityDistribution = await Enquiry.aggregate([
+      ...(Object.keys(combinedMatch).length > 0 ? [{ $match: combinedMatch }] : []),
       {
         $group: {
           _id: '$activity',
@@ -173,7 +290,35 @@ export const getActivityDistribution = async (req, res, next) => {
 // @access  Private
 export const getProductDistribution = async (req, res, next) => {
   try {
+    const { startDate, endDate, role } = req.query;
+    
+    // Build date filter
+    const dateMatch = {};
+    if (startDate || endDate) {
+      dateMatch.enquiryDate = {};
+      if (startDate) dateMatch.enquiryDate.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dateMatch.enquiryDate.$lte = end;
+      }
+    }
+    
+    // Build role filter
+    let roleMatch = {};
+    if (role) {
+      const usersWithRole = await User.find({ role }).select('_id');
+      const userIds = usersWithRole.map(u => u._id);
+      roleMatch.$or = [
+        { salesRepresentative: { $in: userIds } },
+        { rndHandler: { $in: userIds } }
+      ];
+    }
+    
+    const combinedMatch = { ...dateMatch, ...roleMatch };
+    
     const productDistribution = await Enquiry.aggregate([
+      ...(Object.keys(combinedMatch).length > 0 ? [{ $match: combinedMatch }] : []),
       {
         $group: {
           _id: '$productType',
@@ -197,11 +342,35 @@ export const getProductDistribution = async (req, res, next) => {
 // @access  Private
 export const getFulfillmentAnalysis = async (req, res, next) => {
   try {
+    const { startDate, endDate, role } = req.query;
+    
+    // Build date filter
+    const dateMatch = {
+      fulfillmentTime: { $exists: true, $ne: null, $gte: 0 },
+    };
+    if (startDate || endDate) {
+      dateMatch.enquiryDate = {};
+      if (startDate) dateMatch.enquiryDate.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dateMatch.enquiryDate.$lte = end;
+      }
+    }
+    
+    // Build role filter
+    if (role) {
+      const usersWithRole = await User.find({ role }).select('_id');
+      const userIds = usersWithRole.map(u => u._id);
+      dateMatch.$or = [
+        { salesRepresentative: { $in: userIds } },
+        { rndHandler: { $in: userIds } }
+      ];
+    }
+    
     const fulfillmentData = await Enquiry.aggregate([
       {
-        $match: {
-          fulfillmentTime: { $exists: true, $ne: null, $gte: 0 },
-        },
+        $match: dateMatch,
       },
       {
         $bucket: {
@@ -229,7 +398,35 @@ export const getFulfillmentAnalysis = async (req, res, next) => {
 // @access  Private
 export const getTrendAnalysis = async (req, res, next) => {
   try {
+    const { startDate, endDate, role } = req.query;
+    
+    // Build date filter
+    const dateMatch = {};
+    if (startDate || endDate) {
+      dateMatch.enquiryDate = {};
+      if (startDate) dateMatch.enquiryDate.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        dateMatch.enquiryDate.$lte = end;
+      }
+    }
+    
+    // Build role filter
+    let roleMatch = {};
+    if (role) {
+      const usersWithRole = await User.find({ role }).select('_id');
+      const userIds = usersWithRole.map(u => u._id);
+      roleMatch.$or = [
+        { salesRepresentative: { $in: userIds } },
+        { rndHandler: { $in: userIds } }
+      ];
+    }
+    
+    const combinedMatch = { ...dateMatch, ...roleMatch };
+    
     const monthlyTrends = await Enquiry.aggregate([
+      ...(Object.keys(combinedMatch).length > 0 ? [{ $match: combinedMatch }] : []),
       {
         $group: {
           _id: {

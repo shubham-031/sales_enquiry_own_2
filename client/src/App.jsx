@@ -3,6 +3,7 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useEffect } from 'react';
 
 // Layout
 import Layout from './components/Layout/Layout';
@@ -153,7 +154,12 @@ const theme = createTheme({
 });
 
 function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, initAuth } = useAuthStore();
+
+  // Initialize auth state on mount
+  useEffect(() => {
+    initAuth();
+  }, [initAuth]);
 
   return (
     <ThemeProvider theme={theme}>

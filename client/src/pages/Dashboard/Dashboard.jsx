@@ -11,6 +11,12 @@ import {
   IconButton,
   Tooltip,
   Stack,
+  TextField,
+  Button,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from '@mui/material';
 import {
   Assignment,
@@ -24,7 +30,13 @@ import {
   Speed,
   PieChart as PieChartIcon,
   BarChart as BarChartIcon,
+  FilterList,
+  Clear,
 } from '@mui/icons-material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs from 'dayjs';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -60,26 +72,25 @@ const StatCard = ({ title, value, icon, color, bgColor }) => (
   <Card 
     sx={{ 
       height: '100%',
-      background: `linear-gradient(135deg, ${bgColor}15 0%, ${bgColor}05 100%)`,
-      border: `1px solid ${bgColor}30`,
+      background: 'white',
+      border: 'none',
+      borderRadius: 3,
+      boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       position: 'relative',
       overflow: 'hidden',
       '&:hover': {
-        transform: 'translateY(-8px)',
-        boxShadow: `0 12px 24px ${bgColor}20`,
-        borderColor: `${bgColor}50`,
+        transform: 'translateY(-4px)',
+        boxShadow: '0 12px 24px rgba(0,0,0,0.12)',
       },
       '&::before': {
         content: '""',
         position: 'absolute',
         top: 0,
+        left: 0,
         right: 0,
-        width: '100px',
-        height: '100px',
-        background: `radial-gradient(circle, ${bgColor}10 0%, transparent 70%)`,
-        borderRadius: '50%',
-        transform: 'translate(30%, -30%)',
+        height: '4px',
+        background: `linear-gradient(90deg, ${bgColor}, ${color})`,
       }
     }}
   >
@@ -132,6 +143,9 @@ const Dashboard = () => {
   const [productDistribution, setProductDistribution] = useState(null);
   const [fulfillmentAnalysis, setFulfillmentAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState(null);
+  const [endDate, setEndDate] = useState(null);
+  const [role, setRole] = useState('');
 
   useEffect(() => {
     fetchAllData();
@@ -140,14 +154,27 @@ const Dashboard = () => {
   const fetchAllData = async () => {
     try {
       setLoading(true);
+      
+      // Prepare filter params
+      const params = {};
+      if (startDate) {
+        params.startDate = dayjs(startDate).format('YYYY-MM-DD');
+      }
+      if (endDate) {
+        params.endDate = dayjs(endDate).format('YYYY-MM-DD');
+      }
+      if (role) {
+        params.role = role;
+      }
+      
       const [statsRes, teamRes, marketRes, trendRes, activityRes, productRes, fulfillmentRes] = await Promise.all([
-        dashboardService.getStats(),
-        dashboardService.getTeamPerformance(),
-        dashboardService.getMarketAnalysis(),
-        dashboardService.getTrendAnalysis(),
-        dashboardService.getActivityDistribution(),
-        dashboardService.getProductDistribution(),
-        dashboardService.getFulfillmentAnalysis(),
+        dashboardService.getStats(params),
+        dashboardService.getTeamPerformance(params),
+        dashboardService.getMarketAnalysis(params),
+        dashboardService.getTrendAnalysis(params),
+        dashboardService.getActivityDistribution(params),
+        dashboardService.getProductDistribution(params),
+        dashboardService.getFulfillmentAnalysis(params),
       ]);
       
       setStats(statsRes);
@@ -164,6 +191,22 @@ const Dashboard = () => {
       setLoading(false);
     }
   };
+
+  const handleApplyFilter = () => {
+    fetchAllData();
+  };
+
+  const handleClearFilter = () => {
+    setStartDate(null);
+    setEndDate(null);
+    setRole('');
+  };
+
+  useEffect(() => {
+    if (startDate === null && endDate === null && role === '') {
+      fetchAllData();
+    }
+  }, [startDate, endDate, role]);
 
   // Chart configurations
   const commonChartOptions = {
@@ -501,16 +544,41 @@ const Dashboard = () => {
   }
 
   return (
-    <Box>
+    <Box sx={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%)',
+      p: 3
+    }}>
       {/* Header Section */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box>
-          <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Assessment sx={{ fontSize: 40, color: 'primary.main' }} />
+          <Typography 
+            variant="h4" 
+            fontWeight="800" 
+            gutterBottom 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 1.5,
+              color: '#0f172a',
+              letterSpacing: '-0.02em'
+            }}
+          >
+            <Box
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                p: 1.5,
+                borderRadius: 2,
+                display: 'flex',
+                boxShadow: '0 4px 14px rgba(102, 126, 234, 0.4)'
+              }}
+            >
+              <Assessment sx={{ fontSize: 32, color: 'white' }} />
+            </Box>
             Sales Enquiry Dashboard
           </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Monitor team performance and enquiry insights
+          <Typography variant="body1" color="text.secondary" sx={{ fontSize: '1rem', fontWeight: 500 }}>
+            Real-time insights and performance metrics
           </Typography>
         </Box>
         <Stack direction="row" spacing={2}>
@@ -518,9 +586,15 @@ const Dashboard = () => {
             <IconButton 
               onClick={fetchAllData}
               sx={{ 
-                backgroundColor: 'primary.main',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: 'white',
-                '&:hover': { backgroundColor: 'primary.dark' }
+                boxShadow: '0 4px 14px rgba(102, 126, 234, 0.4)',
+                '&:hover': { 
+                  background: 'linear-gradient(135deg, #7c8ef0 0%, #8659ae 100%)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 6px 20px rgba(102, 126, 234, 0.5)'
+                },
+                transition: 'all 0.3s ease'
               }}
             >
               <Refresh />
@@ -528,9 +602,101 @@ const Dashboard = () => {
           </Tooltip>
         </Stack>
       </Box>
+
+      {/* Date Filter Section */}
+      <Paper 
+        sx={{ 
+          p: 3,
+          mb: 3,
+          background: 'white',
+          border: 'none',
+          borderRadius: 3,
+          boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <FilterList sx={{ fontSize: 24, color: 'primary.main', mr: 1 }} />
+          <Typography variant="h6" fontWeight="bold">
+            Date Filter
+          </Typography>
+        </Box>
+        <LocalizationProvider dateAdapter={AdapterDayjs}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+            <DatePicker
+              label="Start Date"
+              value={startDate}
+              onChange={(newValue) => setStartDate(newValue)}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  size: 'small',
+                },
+              }}
+            />
+            <DatePicker
+              label="End Date"
+              value={endDate}
+              onChange={(newValue) => setEndDate(newValue)}
+              minDate={startDate}
+              slotProps={{
+                textField: {
+                  fullWidth: true,
+                  size: 'small',
+                },
+              }}
+            />
+            <FormControl fullWidth size="small">
+              <InputLabel id="role-filter-label">Role</InputLabel>
+              <Select
+                labelId="role-filter-label"
+                id="role-filter"
+                value={role}
+                label="Role"
+                onChange={(e) => setRole(e.target.value)}
+              >
+                <MenuItem value="">All Roles</MenuItem>
+                <MenuItem value="admin">Admin</MenuItem>
+                <MenuItem value="sales">Sales</MenuItem>
+                <MenuItem value="r&d">R&D</MenuItem>
+                <MenuItem value="management">Management</MenuItem>
+              </Select>
+            </FormControl>
+            <Stack direction="row" spacing={1}>
+              <Button
+                variant="contained"
+                startIcon={<FilterList />}
+                onClick={handleApplyFilter}
+                disabled={!startDate && !endDate && !role}
+                sx={{
+                  backgroundColor: '#1e40af',
+                  '&:hover': {
+                    backgroundColor: '#1e3a8a',
+                  },
+                  '&.Mui-disabled': {
+                    backgroundColor: '#93c5fd',
+                    color: 'white',
+                  },
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Apply Filter
+              </Button>
+              <Button
+                variant="outlined"
+                startIcon={<Clear />}
+                onClick={handleClearFilter}
+                disabled={!startDate && !endDate && !role}
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                Clear
+              </Button>
+            </Stack>
+          </Stack>
+        </LocalizationProvider>
+      </Paper>
       
       {/* Chart 1: Statistics Cards */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 2 }}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Total Enquiries"
@@ -570,14 +736,19 @@ const Dashboard = () => {
       </Grid>
 
       {/* Chart 7: Team Performance Metrics (KPI Cards) */}
-      <Grid container spacing={3} sx={{ mb: 4 }}>
+      <Grid container spacing={3} sx={{ mb: 2 }}>
         <Grid item xs={12}>
           <Paper 
             sx={{ 
               p: 3,
               background: 'white',
-              border: '1px solid #e2e8f0',
+              border: 'none',
               borderRadius: 3,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -679,8 +850,13 @@ const Dashboard = () => {
             sx={{ 
               p: 3,
               background: 'white',
-              border: '1px solid #e2e8f0',
+              border: 'none',
               borderRadius: 3,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -694,7 +870,7 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ height: 400 }}>
+            <Box sx={{ height: 220 }}>
               <Line data={monthlyTrendData} options={lineChartOptions} />
             </Box>
           </Paper>
@@ -702,14 +878,19 @@ const Dashboard = () => {
       </Grid>
 
       {/* Charts 3 & 4: Team Performance */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={3} sx={{ mb: 2 }}>
         <Grid item xs={12} md={6}>
           <Paper 
             sx={{ 
               p: 3,
               background: 'white',
-              border: '1px solid #e2e8f0',
+              border: 'none',
               borderRadius: 3,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -723,7 +904,7 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ height: 380 }}>
+            <Box sx={{ height: 200 }}>
               <Bar data={salesTeamData} options={horizontalBarOptions} />
             </Box>
           </Paper>
@@ -734,8 +915,13 @@ const Dashboard = () => {
             sx={{ 
               p: 3,
               background: 'white',
-              border: '1px solid #e2e8f0',
+              border: 'none',
               borderRadius: 3,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -749,7 +935,7 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ height: 380 }}>
+            <Box sx={{ height: 200 }}>
               <Bar data={rndTeamData} options={barChartOptions} />
             </Box>
           </Paper>
@@ -757,14 +943,19 @@ const Dashboard = () => {
       </Grid>
 
       {/* Charts 5 & 6: Distribution Charts */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
+      <Grid container spacing={3} sx={{ mb: 2 }}>
         <Grid item xs={12} md={6}>
           <Paper 
             sx={{ 
               p: 3,
               background: 'white',
-              border: '1px solid #e2e8f0',
+              border: 'none',
               borderRadius: 3,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -778,7 +969,7 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ height: 320, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <Box sx={{ height: 200, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <Doughnut data={activityDistributionData} options={doughnutOptions} />
             </Box>
           </Paper>
@@ -789,8 +980,13 @@ const Dashboard = () => {
             sx={{ 
               p: 3,
               background: 'white',
-              border: '1px solid #e2e8f0',
+              border: 'none',
               borderRadius: 3,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -804,7 +1000,7 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ height: 320, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <Box sx={{ height: 200, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <Pie data={marketDistributionData} options={{
                 ...doughnutOptions,
                 cutout: '0%',
@@ -821,8 +1017,13 @@ const Dashboard = () => {
             sx={{ 
               p: 3,
               background: 'white',
-              border: '1px solid #e2e8f0',
+              border: 'none',
               borderRadius: 3,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -836,7 +1037,7 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ height: 320 }}>
+            <Box sx={{ height: 200 }}>
               <Bar data={productTypeData} options={barChartOptions} />
             </Box>
           </Paper>
@@ -847,8 +1048,13 @@ const Dashboard = () => {
             sx={{ 
               p: 3,
               background: 'white',
-              border: '1px solid #e2e8f0',
+              border: 'none',
               borderRadius: 3,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              }
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
@@ -862,7 +1068,7 @@ const Dashboard = () => {
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ height: 320 }}>
+            <Box sx={{ height: 200 }}>
               <Bar data={fulfillmentTimeData} options={barChartOptions} />
             </Box>
           </Paper>

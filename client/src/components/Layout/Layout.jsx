@@ -31,6 +31,7 @@ import {
 import useAuthStore from '../../store/authStore';
 import { authService } from '../../services/authService';
 import { toast } from 'react-toastify';
+import TopAlert from '../TopAlert';
 
 const drawerWidth = 240;
 
@@ -300,6 +301,8 @@ const Layout = () => {
         }}
       >
         <Toolbar />
+        {/* Top alert for upcoming enquiry deadlines */}
+        <TopAlert />
         <Box sx={{ mt: 2 }}>
           <Outlet />
         </Box>
