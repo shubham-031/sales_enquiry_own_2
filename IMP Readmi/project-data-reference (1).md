@@ -75,14 +75,3 @@
 ```
 
 ---
-
-## Dashboard Metrics & Recommendations
-- Track counts for OPEN, CLOSED, QUOTED, REGRETED statuses
-- Visualize average fulfillment time, team-wise performance, and market/product distribution
-
----
-
-## Usage Tips
-- Clean and standardize fields (especially PRODUCT TYPE, ACTIVITY, SUPPLY SCOPE)
-- Handle missing values for optional fields (PO No., REMARK)
-- Use boolean conversion for "Y"/"N" fields
