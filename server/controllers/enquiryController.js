@@ -90,7 +90,7 @@ export const createEnquiry = async (req, res, next) => {
 
 // @desc    Update enquiry
 // @route   PUT /api/enquiries/:id
-// @access  Private (Sales, R&D, Admin)
+// @access  Private (Sales, R&D, Admin) - Field permissions enforced
 export const updateEnquiry = async (req, res, next) => {
   try {
     let enquiry = await Enquiry.findById(req.params.id);
@@ -99,15 +99,27 @@ export const updateEnquiry = async (req, res, next) => {
       throw new ApiError(404, 'Enquiry not found');
     }
 
+    // Check if there are any fields to update after permission filtering
+    if (Object.keys(req.body).length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: `Your role (${req.user.role}) does not have permission to edit the requested fields`,
+      });
+    }
+
     req.body.updatedBy = req.user.id;
 
     enquiry = await Enquiry.findByIdAndUpdate(req.params.id, req.body, {
       new: true,
       runValidators: true,
-    });
+    })
+      .populate('salesRepresentative', 'name email department')
+      .populate('rndHandler', 'name email department')
+      .populate('updatedBy', 'name email');
 
     res.status(200).json({
       success: true,
+      message: 'Enquiry updated successfully',
       data: enquiry,
     });
   } catch (error) {

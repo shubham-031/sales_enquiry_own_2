@@ -12,6 +12,7 @@ import {
 import { bulkImportEnquiries } from '../controllers/importController.js';
 import { protect, authorize } from '../middlewares/auth.js';
 import { validate } from '../middlewares/validation.js';
+import { enforceFieldPermissions, getEditableFields } from '../middlewares/rolePermissions.js';
 import upload from '../config/multer.js';
 
 const router = express.Router();
@@ -33,6 +34,13 @@ router.delete(
   deleteAllEnquiries
 );
 
+// Get editable fields for current user role
+router.get(
+  '/permissions/editable-fields',
+  protect,
+  getEditableFields
+);
+
 router
   .route('/')
   .get(protect, getEnquiries)
@@ -44,7 +52,7 @@ router
       body('marketType').notEmpty().withMessage('Market type is required'),
       body('productType').notEmpty().withMessage('Product type is required'),
     ],
-    validate,
+    validate,enforceFieldPermissions, 
     createEnquiry
   );
 

@@ -3,6 +3,9 @@ import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import connectDB from './config/database.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { logger } from './config/logger.js';
@@ -16,6 +19,17 @@ import reportRoutes from './routes/reportRoutes.js';
 
 // Load environment variables
 dotenv.config();
+
+// Get dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Ensure uploads directory exists
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  logger.info('Created uploads directory');
+}
 
 // Initialize Express app
 const app = express();
