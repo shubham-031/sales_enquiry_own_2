@@ -20,6 +20,7 @@ import EnquiryDetails from './pages/Enquiry/EnquiryDetails';
 import Profile from './pages/Profile/Profile';
 import Users from './pages/Users/Users';
 import Reports from './pages/Reports/Reports';
+import ManageColumns from './pages/Settings/ManageColumns';
 
 // Store
 import useAuthStore from './store/authStore';
@@ -189,6 +190,7 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/users" element={<Users />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/settings/manage-columns" element={<ManageColumns />} />
           </Route>
 
           {/* Redirect unknown routes to landing */}

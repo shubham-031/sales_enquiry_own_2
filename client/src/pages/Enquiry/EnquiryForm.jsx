@@ -11,6 +11,8 @@ import {
   Alert,
   CircularProgress,
   Divider,
+  FormControlLabel,
+  Checkbox,
 } from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -27,6 +29,7 @@ const EnquiryForm = () => {
   const [success, setSuccess] = useState('');
   const [salesUsers, setSalesUsers] = useState([]);
   const [rndUsers, setRndUsers] = useState([]);
+  const [customFields, setCustomFields] = useState([]);
 
   const [formData, setFormData] = useState({
     customerName: '',
@@ -48,15 +51,16 @@ const EnquiryForm = () => {
     rndHandler: '',
     activity: 'In Progress',
     status: 'Open',
-    quoteDate: '',
+    quotationDate: '',
     daysRequiredForFulfillment: '',
     closureDate: '',
     remarks: '',
-    delayRemarks: '',
+    dynamicFields: {},
   });
 
   useEffect(() => {
     fetchUsers();
+    fetchCustomFields();
     if (isEditMode) {
       fetchEnquiry();
     }
@@ -64,12 +68,21 @@ const EnquiryForm = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get('/users');
+      const response = await axios.get('/api/users');
       const users = response.data.data;
-      setSalesUsers(users.filter((u) => u.role === 'sales' || u.role === 'admin'));
-      setRndUsers(users.filter((u) => u.role === 'r&d' || u.role === 'admin'));
+      setSalesUsers(users.filter((u) => u.role === 'sales' || u.role === 'superuser'));
+      setRndUsers(users.filter((u) => u.role === 'r&d' || u.role === 'superuser'));
     } catch (err) {
       console.error('Failed to fetch users:', err);
+    }
+  };
+
+  const fetchCustomFields = async () => {
+    try {
+      const response = await axios.get('/custom-fields');
+      setCustomFields(response.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch custom fields:', err);
     }
   };
 
@@ -82,10 +95,11 @@ const EnquiryForm = () => {
       const formattedData = {
         ...data,
         enquiryDate: data.enquiryDate ? new Date(data.enquiryDate).toISOString().split('T')[0] : '',
-        quoteDate: data.quoteDate ? new Date(data.quoteDate).toISOString().split('T')[0] : '',
+        quotationDate: data.quotationDate ? new Date(data.quotationDate).toISOString().split('T')[0] : '',
         closureDate: data.closureDate ? new Date(data.closureDate).toISOString().split('T')[0] : '',
         salesRepresentative: data.salesRepresentative?._id || '',
         rndHandler: data.rndHandler?._id || '',
+        dynamicFields: data.dynamicFields || {},
       };
       
       setFormData(formattedData);
@@ -110,6 +124,96 @@ const EnquiryForm = () => {
       } else {
         setFormData((prev) => ({ ...prev, activity: value, status: 'Open' }));
       }
+    }
+  };
+
+  const handleDynamicFieldChange = (fieldName, value) => {
+    setFormData({
+      ...formData,
+      dynamicFields: {
+        ...formData.dynamicFields,
+        [fieldName]: value,
+      },
+    });
+  };
+
+  const renderDynamicField = (field) => {
+    const value = formData.dynamicFields[field.name] || '';
+
+    switch (field.type) {
+      case 'number':
+        return (
+          <TextField
+            key={field._id}
+            fullWidth
+            type="number"
+            label={field.label}
+            value={value}
+            onChange={(e) => handleDynamicFieldChange(field.name, e.target.value)}
+            required={field.isRequired}
+            helperText={field.description}
+          />
+        );
+      case 'date':
+        return (
+          <TextField
+            key={field._id}
+            fullWidth
+            type="date"
+            label={field.label}
+            value={value}
+            onChange={(e) => handleDynamicFieldChange(field.name, e.target.value)}
+            required={field.isRequired}
+            InputLabelProps={{ shrink: true }}
+            helperText={field.description}
+          />
+        );
+      case 'boolean':
+        return (
+          <FormControlLabel
+            key={field._id}
+            control={
+              <Checkbox
+                checked={value === true || value === 'true'}
+                onChange={(e) => handleDynamicFieldChange(field.name, e.target.checked)}
+              />
+            }
+            label={field.label}
+          />
+        );
+      case 'select':
+        return (
+          <TextField
+            key={field._id}
+            fullWidth
+            select
+            label={field.label}
+            value={value}
+            onChange={(e) => handleDynamicFieldChange(field.name, e.target.value)}
+            required={field.isRequired}
+            helperText={field.description}
+          >
+            <MenuItem value="">None</MenuItem>
+            {field.options.map((opt) => (
+              <MenuItem key={opt} value={opt}>
+                {opt}
+              </MenuItem>
+            ))}
+          </TextField>
+        );
+      case 'text':
+      default:
+        return (
+          <TextField
+            key={field._id}
+            fullWidth
+            label={field.label}
+            value={value}
+            onChange={(e) => handleDynamicFieldChange(field.name, e.target.value)}
+            required={field.isRequired}
+            helperText={field.description}
+          />
+        );
     }
   };
 
@@ -498,9 +602,9 @@ const EnquiryForm = () => {
               <TextField
                 fullWidth
                 type="date"
-                label="Quote Date"
-                name="quoteDate"
-                value={formData.quoteDate}
+                label="Quotation Date"
+                name="quotationDate"
+                value={formData.quotationDate}
                 onChange={handleChange}
                 InputLabelProps={{ shrink: true }}
                 helperText="Date when quote was sent to customer"
@@ -541,37 +645,39 @@ const EnquiryForm = () => {
                 placeholder="Enter any additional remarks..."
               />
             </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Delay Remarks"
-                name="delayRemarks"
-                value={formData.delayRemarks}
-                onChange={handleChange}
-                multiline
-                rows={2}
-                placeholder="Enter reasons for any delays..."
-              />
-            </Grid>
           </Grid>
 
+          {/* Custom Dynamic Fields */}
+          {customFields.length > 0 && (
+            <>
+              <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+                Additional Custom Fields
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              <Grid container spacing={3}>
+                {customFields.map((field) => (
+                  <Grid item xs={12} md={6} key={field._id}>
+                    {renderDynamicField(field)}
+                  </Grid>
+                ))}
+              </Grid>
+            </>
+          )}
+
           {/* Form Actions */}
-          <Box mt={4} display="flex" gap={2}>
+          <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
             <Button
               type="submit"
               variant="contained"
-              size="large"
               startIcon={<SaveIcon />}
               disabled={loading}
             >
-              {loading ? 'Saving...' : isEditMode ? 'Update Enquiry' : 'Create Enquiry'}
+              {isEditMode ? 'Update Enquiry' : 'Create Enquiry'}
             </Button>
             <Button
               variant="outlined"
-              size="large"
               startIcon={<CancelIcon />}
-              onClick={handleCancel}
+              onClick={() => navigate('/enquiries')}
               disabled={loading}
             >
               Cancel

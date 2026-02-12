@@ -2,6 +2,7 @@ import XLSX from 'xlsx';
 import fs from 'fs';
 import User from '../models/User.js';
 import Enquiry from '../models/Enquiry.js';
+import CustomField from '../models/CustomField.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 import { 
   getFieldValue, 
@@ -79,6 +80,7 @@ const getOrCreateUser = async (name, role) => {
 // @access  Private (Admin, Sales)
 export const bulkImportEnquiries = async (req, res, next) => {
   let filePath = null;
+  const isSuperuser = req.user?.role === 'superuser';
   
   try {
     if (!req.file) {
@@ -179,8 +181,8 @@ export const bulkImportEnquiries = async (req, res, next) => {
           console.log(`All row keys:`, Object.keys(row));
         }
         
-        // Skip if no enquiry number (empty row)
-        if (!enquiryNumber) {
+        // Skip if no enquiry number (empty row) unless superuser override is allowed
+        if (!enquiryNumber && !isSuperuser) {
           if (i < 5) console.log(`Skipping row ${i + 1}: No enquiry number found`);
           continue;
         }
@@ -289,9 +291,63 @@ export const bulkImportEnquiries = async (req, res, next) => {
         if (status === 'Closed' && dateSubmitted) {
           enquiryData.closureDate = dateSubmitted;
         }
+
+        // DYNAMIC FIELDS HANDLING
+        // Get all known static field keys
+        const staticFieldKeys = [
+          'SR. No.', 'Enq No.', 'EXPORT / DOMESTIC', 'PO No.',
+          'DATE RECEIVED', 'DATE SUBMITTED', 'DRAWING', 'COSTING',
+          'R&D', 'SALES', 'OPEN / CLOSED', 'ACTIVITY',
+          'SCOPE OF SUPPLY', 'PRODUCT TYPE', 'DAYS TO COMPLETE ENQUIRY', 'REMARK',
+          'enquiryNumber', 'poNumber', 'marketType', 'productType',
+          'dateReceived', 'dateSubmitted', 'supplyScope', 'status', 'activity',
+          'remarks', 'quantity', 'estimatedValue', 'drawingStatus',
+          'costingStatus', 'rndStatus', 'salesStatus', 'manufacturingType'
+        ];
+
+        const dynamicFields = {};
+
+        // Process all row keys to find dynamic fields
+        for (const [key, value] of Object.entries(row)) {
+          if (value && cleanString(value) !== '' && !staticFieldKeys.some(sf => sf.toLowerCase() === key.toLowerCase())) {
+            // This is a potential dynamic field
+            try {
+              let customField = await CustomField.findOne({ label: key });
+              
+              if (!customField) {
+                // If superuser, auto-create the field
+                if (isSuperuser) {
+                  const fieldName = key.toLowerCase().replace(/\s+/g, '_');
+                  customField = await CustomField.create({
+                    name: fieldName,
+                    label: key,
+                    type: 'text',
+                    createdBy: req.user.id,
+                  });
+                } else {
+                  // Skip unknown fields for non-superuser
+                  if (i < 3) console.log(`Skipping unknown field for non-superuser: "${key}"`);
+                  continue;
+                }
+              }
+
+              // Store dynamic field value
+              dynamicFields[customField.name] = value;
+            } catch (fieldError) {
+              console.log(`Error processing dynamic field "${key}":`, fieldError.message);
+            }
+          }
+        }
+
+        // Add dynamic fields to enquiry data
+        if (Object.keys(dynamicFields).length > 0) {
+          enquiryData.dynamicFields = dynamicFields;
+        }
         
         // Check if enquiry already exists and update instead of creating
-        const existingEnquiry = await Enquiry.findOne({ enquiryNumber });
+        const existingEnquiry = enquiryNumber
+          ? await Enquiry.findOne({ enquiryNumber })
+          : null;
         if (existingEnquiry) {
           await Enquiry.findByIdAndUpdate(existingEnquiry._id, enquiryData);
           console.log(`Updated existing enquiry: ${enquiryNumber}`);

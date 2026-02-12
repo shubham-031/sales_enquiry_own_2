@@ -27,12 +27,12 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['admin', 'sales', 'r&d', 'management'],
+      enum: ['sales', 'r&d', 'management', 'superuser'],
       default: 'sales',
     },
     department: {
       type: String,
-      enum: ['Sales', 'R&D', 'Management', 'Admin'],
+      enum: ['Sales', 'R&D', 'Management', 'Superuser'],
       required: true,
     },
     phone: {

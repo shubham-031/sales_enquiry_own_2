@@ -127,6 +127,12 @@ const enquirySchema = new mongoose.Schema(
         },
       },
     ],
+    // Dynamic fields store custom column values
+    dynamicFields: {
+      type: Map,
+      of: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',

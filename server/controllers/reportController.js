@@ -1,4 +1,5 @@
 import Enquiry from '../models/Enquiry.js';
+import CustomField from '../models/CustomField.js';
 import ExcelJS from 'exceljs';
 
 // @desc    Generate custom report
@@ -69,12 +70,15 @@ export const exportToExcel = async (req, res, next) => {
       .populate('rndHandler', 'name')
       .sort({ enquiryDate: -1 });
 
+    // Fetch all active custom fields
+    const customFields = await CustomField.find({ isActive: true }).sort({ createdAt: 1 });
+
     // Create workbook and worksheet
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Enquiries Report');
 
-    // Define columns
-    worksheet.columns = [
+    // Define static columns
+    const staticColumns = [
       { header: 'Enquiry Number', key: 'enquiryNumber', width: 20 },
       { header: 'Enquiry Date', key: 'enquiryDate', width: 15 },
       { header: 'Customer Name', key: 'customerName', width: 30 },
@@ -89,8 +93,17 @@ export const exportToExcel = async (req, res, next) => {
       { header: 'Closure Date', key: 'closureDate', width: 15 },
       { header: 'Fulfillment Time (days)', key: 'fulfillmentTime', width: 20 },
       { header: 'Remarks', key: 'remarks', width: 40 },
-      { header: 'Delay Remarks', key: 'delayRemarks', width: 40 },
     ];
+
+    // Add dynamic field columns
+    const dynamicColumns = customFields.map(field => ({
+      header: field.label,
+      key: `dynamic_${field.name}`,
+      width: 20
+    }));
+
+    // Combine all columns
+    worksheet.columns = [...staticColumns, ...dynamicColumns];
 
     // Style header row
     worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
@@ -103,7 +116,7 @@ export const exportToExcel = async (req, res, next) => {
 
     // Add data rows
     enquiries.forEach((enquiry) => {
-      worksheet.addRow({
+      const rowData = {
         enquiryNumber: enquiry.enquiryNumber,
         enquiryDate: enquiry.enquiryDate ? new Date(enquiry.enquiryDate).toLocaleDateString() : '',
         customerName: enquiry.customerName,
@@ -114,12 +127,19 @@ export const exportToExcel = async (req, res, next) => {
         rndHandler: enquiry.rndHandler?.name || '',
         activity: enquiry.activity,
         status: enquiry.status,
-        quoteDate: enquiry.quoteDate ? new Date(enquiry.quoteDate).toLocaleDateString() : '',
+        quoteDate: enquiry.quotationDate ? new Date(enquiry.quotationDate).toLocaleDateString() : '',
         closureDate: enquiry.closureDate ? new Date(enquiry.closureDate).toLocaleDateString() : '',
         fulfillmentTime: enquiry.fulfillmentTime || '',
         remarks: enquiry.remarks || '',
-        delayRemarks: enquiry.delayRemarks || '',
+      };
+
+      // Add dynamic field values
+      customFields.forEach(field => {
+        const value = enquiry.dynamicFields?.get?.(field.name) || enquiry.dynamicFields?.[field.name] || '';
+        rowData[`dynamic_${field.name}`] = value;
       });
+
+      worksheet.addRow(rowData);
     });
 
     // Add borders to all cells
