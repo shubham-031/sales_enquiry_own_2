@@ -16,6 +16,7 @@ import enquiryRoutes from './routes/enquiryRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import dashboardRoutes from './routes/dashboardRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import customFieldRoutes from './routes/customFieldRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -60,6 +61,7 @@ app.use('/api/enquiries', enquiryRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/custom-fields', customFieldRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

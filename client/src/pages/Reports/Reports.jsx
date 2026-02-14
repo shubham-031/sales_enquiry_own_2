@@ -18,12 +18,16 @@ import AssessmentIcon from '@mui/icons-material/Assessment';
 import TableChartIcon from '@mui/icons-material/TableChart';
 import DescriptionIcon from '@mui/icons-material/Description';
 import axios from '../../utils/axios';
+import useAuthStore from '../../store/authStore';
 
 const Reports = () => {
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [reportData, setReportData] = useState(null);
+
+  const canGenerateReport = ['management', 'sales', 'r&d', 'superuser'].includes(user?.role);
 
   const [filters, setFilters] = useState({
     startDate: '',
@@ -228,7 +232,7 @@ const Reports = () => {
             <Button
               variant="contained"
               onClick={generateReport}
-              disabled={loading}
+              disabled={loading || !canGenerateReport}
               sx={{ mr: 2 }}
             >
               {loading ? <CircularProgress size={24} /> : 'Generate Report'}

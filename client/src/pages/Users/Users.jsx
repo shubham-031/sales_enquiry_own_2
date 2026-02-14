@@ -140,14 +140,14 @@ const Users = () => {
 
   const getRoleColor = (role) => {
     switch (role) {
-      case 'admin':
-        return 'error';
       case 'management':
         return 'secondary';
       case 'sales':
         return 'primary';
       case 'r&d':
         return 'success';
+      case 'superuser':
+        return 'error';
       default:
         return 'default';
     }
@@ -312,10 +312,11 @@ const Users = () => {
               value={formData.role}
               onChange={handleChange}
             >
-              <MenuItem value="admin">Admin</MenuItem>
+
               <MenuItem value="management">Management</MenuItem>
               <MenuItem value="sales">Sales</MenuItem>
               <MenuItem value="r&d">R&D</MenuItem>
+              <MenuItem value="superuser">Superuser</MenuItem>
             </TextField>
             <TextField
               fullWidth

@@ -37,13 +37,13 @@ const createSampleUsers = async () => {
     }
 
     const users = [
-      // Admin
+      // Superuser
       {
-        name: 'Admin User',
-        email: 'admin@example.com',
-        password: 'admin123',
-        role: 'admin',
-        department: 'Management',
+        name: 'Superuser Account',
+        email: 'superuser@example.com',
+        password: 'superuser123',
+        role: 'superuser',
+        department: 'Superuser',
       },
       // Sales Team
       {
@@ -246,7 +246,7 @@ const seedDatabase = async () => {
     
     console.log('\n✨ Database seeding completed successfully!');
     console.log('\n📝 Login Credentials:');
-    console.log('   Admin: admin@example.com / admin123');
+    console.log('   Superuser: superuser@example.com / superuser123');
     console.log('   Sales: rajesh@example.com / sales123');
     console.log('   R&D: arun@example.com / rnd123');
     console.log('   Management: suresh@example.com / mgmt123\n');

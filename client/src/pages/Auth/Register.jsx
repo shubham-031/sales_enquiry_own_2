@@ -164,7 +164,8 @@ const Register = () => {
                   <MenuItem value="sales">Sales</MenuItem>
                   <MenuItem value="r&d">R&D</MenuItem>
                   <MenuItem value="management">Management</MenuItem>
-                  <MenuItem value="admin">Admin</MenuItem>
+
+                  <MenuItem value="superuser">Superuser</MenuItem>
                 </TextField>
               </Grid>
               <Grid item xs={12} sm={6}>
@@ -180,7 +181,8 @@ const Register = () => {
                   <MenuItem value="Sales">Sales</MenuItem>
                   <MenuItem value="R&D">R&D</MenuItem>
                   <MenuItem value="Management">Management</MenuItem>
-                  <MenuItem value="Admin">Admin</MenuItem>
+
+                  <MenuItem value="Superuser">Superuser</MenuItem>
                 </TextField>
               </Grid>
               <Grid item xs={12}>

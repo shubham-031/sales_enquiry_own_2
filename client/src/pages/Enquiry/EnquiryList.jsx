@@ -42,6 +42,7 @@ const EnquiryList = () => {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [enquiries, setEnquiries] = useState([]);
+  const [customFields, setCustomFields] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -68,7 +69,17 @@ const EnquiryList = () => {
 
   useEffect(() => {
     fetchEnquiries();
+    fetchCustomFields();
   }, []);
+
+  const fetchCustomFields = async () => {
+    try {
+      const response = await axios.get('/custom-fields');
+      setCustomFields(response.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch custom fields:', err);
+    }
+  };
 
   const fetchEnquiries = async () => {
     try {
@@ -397,6 +408,17 @@ const EnquiryList = () => {
       width: 250,
       valueGetter: (params) => params.row?.remarks || 'No remarks',
     },
+    // Dynamic fields columns
+    ...customFields.map(field => ({
+      field: `dynamicFields.${field.name}`,
+      headerName: field.label,
+      width: 130,
+      valueGetter: (params) => {
+        const dynFields = params.row?.dynamicFields || {};
+        const value = dynFields[field.name];
+        return value !== undefined && value !== null ? String(value) : '—';
+      },
+    })),
     {
       field: 'actions',
       headerName: 'Actions',
@@ -461,7 +483,7 @@ const EnquiryList = () => {
           >
             Import Excel
           </Button>
-          {user?.role === 'admin' && (
+          {(user?.role === 'superuser') && (
             <Button
               variant="outlined"
               color="error"
