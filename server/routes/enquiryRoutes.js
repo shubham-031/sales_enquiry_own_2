@@ -20,16 +20,16 @@ const router = express.Router();
 router.post(
   '/bulk-import',
   protect,
-  authorize('admin', 'sales'),
+  authorize('superuser', 'sales'),
   upload.single('file'),
   bulkImportEnquiries
 );
 
-// Delete all enquiries route (Admin only - must be before /:id route)
+// Delete all enquiries route (Superuser only - must be before /:id route)
 router.delete(
   '/all',
   protect,
-  authorize('admin'),
+  authorize('superuser'),
   deleteAllEnquiries
 );
 
@@ -38,7 +38,7 @@ router
   .get(protect, getEnquiries)
   .post(
     protect,
-    authorize('admin', 'sales', 'r&d'),
+    authorize('superuser', 'sales', 'r&d'),
     [
       // Removed customerName validation as it may not be present in Excel imports
       body('marketType').notEmpty().withMessage('Market type is required'),
@@ -51,8 +51,8 @@ router
 router
   .route('/:id')
   .get(protect, getEnquiryById)
-  .put(protect, authorize('admin', 'sales', 'r&d'), updateEnquiry)
-  .delete(protect, authorize('admin'), deleteEnquiry);
+  .put(protect, authorize('superuser', 'sales', 'r&d'), updateEnquiry)
+  .delete(protect, authorize('superuser'), deleteEnquiry);
 
 router.post('/:id/attachments', protect, uploadAttachment);
 

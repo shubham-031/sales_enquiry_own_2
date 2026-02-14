@@ -70,14 +70,41 @@ export const getEnquiryById = async (req, res, next) => {
 
 // @desc    Create new enquiry
 // @route   POST /api/enquiries
-// @access  Private (Sales, R&D, Admin)
+// @access  Private (Sales, R&D, Superuser)
 export const createEnquiry = async (req, res, next) => {
   try {
-    req.body.createdBy = req.user.id;
-    req.body.salesRepName = req.user.name;
-    req.body.salesRepresentative = req.user.id;
+    // Separate static and dynamic fields
+    const staticFields = [
+      'enquiryNumber', 'poNumber', 'customerName', 'enquiryDate', 'dateReceived',
+      'dateSubmitted', 'marketType', 'productType', 'supplyScope', 'quantity',
+      'estimatedValue', 'drawingStatus', 'costingStatus', 'rndStatus', 'salesStatus',
+      'manufacturingType', 'salesRepresentative', 'salesRepName', 'rndHandler',
+      'rndHandlerName', 'status', 'activity', 'quotationDate', 'fulfillmentTime',
+      'daysRequiredForFulfillment', 'closureDate', 'remarks', 'attachments'
+    ];
 
-    const enquiry = await Enquiry.create(req.body);
+    const dynamicFields = {};
+    const enquiryData = {};
+
+    // Separate dynamic from static fields
+    for (const [key, value] of Object.entries(req.body)) {
+      if (staticFields.includes(key)) {
+        enquiryData[key] = value;
+      } else {
+        dynamicFields[key] = value;
+      }
+    }
+
+    enquiryData.createdBy = req.user.id;
+    enquiryData.salesRepName = req.user.name;
+    enquiryData.salesRepresentative = req.user.id;
+
+    // Add dynamic fields to the enquiry
+    if (Object.keys(dynamicFields).length > 0) {
+      enquiryData.dynamicFields = dynamicFields;
+    }
+
+    const enquiry = await Enquiry.create(enquiryData);
 
     res.status(201).json({
       success: true,
@@ -90,7 +117,7 @@ export const createEnquiry = async (req, res, next) => {
 
 // @desc    Update enquiry
 // @route   PUT /api/enquiries/:id
-// @access  Private (Sales, R&D, Admin)
+// @access  Private (Sales, R&D, Superuser)
 export const updateEnquiry = async (req, res, next) => {
   try {
     let enquiry = await Enquiry.findById(req.params.id);
@@ -99,9 +126,37 @@ export const updateEnquiry = async (req, res, next) => {
       throw new ApiError(404, 'Enquiry not found');
     }
 
-    req.body.updatedBy = req.user.id;
+    // Separate static and dynamic fields
+    const staticFields = [
+      'enquiryNumber', 'poNumber', 'customerName', 'enquiryDate', 'dateReceived',
+      'dateSubmitted', 'marketType', 'productType', 'supplyScope', 'quantity',
+      'estimatedValue', 'drawingStatus', 'costingStatus', 'rndStatus', 'salesStatus',
+      'manufacturingType', 'salesRepresentative', 'salesRepName', 'rndHandler',
+      'rndHandlerName', 'status', 'activity', 'quotationDate', 'fulfillmentTime',
+      'daysRequiredForFulfillment', 'closureDate', 'remarks', 'attachments'
+    ];
 
-    enquiry = await Enquiry.findByIdAndUpdate(req.params.id, req.body, {
+    const updateData = { updatedBy: req.user.id };
+    const dynamicUpdates = {};
+
+    // Separate static and dynamic fields
+    for (const [key, value] of Object.entries(req.body)) {
+      if (staticFields.includes(key)) {
+        updateData[key] = value;
+      } else {
+        dynamicUpdates[key] = value;
+      }
+    }
+
+    // Merge dynamic fields
+    if (Object.keys(dynamicUpdates).length > 0) {
+      updateData.dynamicFields = {
+        ...enquiry.dynamicFields,
+        ...dynamicUpdates,
+      };
+    }
+
+    enquiry = await Enquiry.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true,
     });

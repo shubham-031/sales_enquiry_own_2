@@ -4,7 +4,7 @@ import { protect, authorize } from '../middlewares/auth.js';
 
 const router = express.Router();
 
-router.post('/generate', protect, authorize('admin', 'management'), generateReport);
+router.post('/generate', protect, authorize('superuser', 'management', 'sales', 'r&d'), generateReport);
 router.post('/export/excel', protect, exportToExcel);
 router.post('/export/csv', protect, exportToCSV);
 

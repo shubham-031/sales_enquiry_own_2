@@ -655,7 +655,7 @@ const Dashboard = () => {
                 onChange={(e) => setRole(e.target.value)}
               >
                 <MenuItem value="">All Roles</MenuItem>
-                <MenuItem value="admin">Admin</MenuItem>
+                <MenuItem value="superuser">Superuser</MenuItem>
                 <MenuItem value="sales">Sales</MenuItem>
                 <MenuItem value="r&d">R&D</MenuItem>
                 <MenuItem value="management">Management</MenuItem>

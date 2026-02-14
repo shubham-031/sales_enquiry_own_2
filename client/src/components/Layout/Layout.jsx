@@ -40,6 +40,7 @@ const menuItems = [
   { text: 'Enquiries', icon: <AssignmentIcon />, path: '/enquiries' },
   { text: 'Users', icon: <PeopleIcon />, path: '/users', roles: ['admin', 'management'] },
   { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
+  { text: 'Manage Columns', icon: <DashboardIcon />, path: '/settings/manage-columns', roles: ['superuser'] },
 ];
 
 const Layout = () => {
@@ -108,7 +109,7 @@ const Layout = () => {
       <List sx={{ px: 2, pt: 2 }}>
         {menuItems.map((item) => {
           // Check if user has permission to view this menu item
-          if (item.roles && !item.roles.includes(user?.role)) {
+          if (item.roles && !item.roles.includes(user?.role) && user?.role !== 'superuser') {
             return null;
           }
           return (

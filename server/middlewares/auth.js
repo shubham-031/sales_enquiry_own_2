@@ -38,6 +38,9 @@ export const protect = async (req, res, next) => {
 
 export const authorize = (...roles) => {
   return (req, res, next) => {
+    if (req.user?.role === 'superuser') {
+      return next();
+    }
     if (!roles.includes(req.user.role)) {
       throw new ApiError(
         403,
