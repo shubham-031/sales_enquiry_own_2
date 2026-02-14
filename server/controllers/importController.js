@@ -97,46 +97,22 @@ export const bulkImportEnquiries = async (req, res, next) => {
     console.log('Sheet name:', sheetName);
     console.log('Sheet range:', worksheet['!ref']);
     
-    // Convert to JSON - first check if we need to skip header rows
+    // Convert to JSON - read from row 2 (index 1) since row 1 has grouped headers
+    // ✅ IMPORTANT: Using range: 1 means start from row 2 (0-indexed)
     let data = XLSX.utils.sheet_to_json(worksheet, { 
       raw: false,
       defval: '',
-      blankrows: false
+      blankrows: false,
+      range: 1  // ✅ Read from row 2, using it as header row
     });
     
-    // Check if first row contains header names (merged cells create __EMPTY columns)
-    if (data.length > 0 && data[0]['__EMPTY'] === 'Enq No.') {
-      console.log('Detected header row in data, using row 2 as actual header');
-      // First row is actually the header, re-read with proper header
-      data = XLSX.utils.sheet_to_json(worksheet, { 
-        raw: false,
-        defval: '',
-        blankrows: false,
-        range: 1 // Start from row 2 (0-indexed, so 1 means row 2)
-      });
-      
-      // Manually map the columns based on position since headers are in merged cells
-      const properHeaders = [
-        'SR. No.', 'Enq No.', 'EXPORT / DOMESTIC', 'PO No.',
-        'DATE RECEIVED', 'DATE SUBMITTED', 'DRAWING', 'COSTING',
-        'R&D', 'SALES', 'OPEN / CLOSED', 'ACTIVITY',
-        'SCOPE OF SUPPLY', 'PRODUCT TYPE', 'DAYS TO COMPLETE ENQUIRY', 'REMARK'
-      ];
-      
-      // Remap data with proper headers
-      data = data.map(row => {
-        const newRow = {};
-        const keys = Object.keys(row);
-        keys.forEach((key, index) => {
-          if (properHeaders[index]) {
-            newRow[properHeaders[index]] = row[key];
-          }
-        });
-        return newRow;
-      });
-    }
+    console.log('\n📋 Excel File Reading:');
+    console.log(`Total data rows extracted: ${data.length}`);
     
-    console.log('Total rows extracted:', data.length);
+    if (data.length > 0) {
+      console.log(`First row column keys: ${Object.keys(data[0]).join(', ')}`);
+      console.log(`First row data (sample): ${JSON.stringify(data[0]).substring(0, 250)}`);
+    }
     
     if (!data || data.length === 0) {
       throw new ApiError(400, 'Excel file is empty or has no data');
@@ -152,6 +128,58 @@ export const bulkImportEnquiries = async (req, res, next) => {
       columnNames: Object.keys(data[0] || {}), // For debugging
     };
 
+    // ✅ Validate all 16 columns are present
+    const { COLUMN_MAPPINGS } = await import('../utils/columnMapper.js');
+    
+    console.log('\n📋 ============= COLUMN VALIDATION =============');
+    console.log('Expected 16 Excel columns:');
+    console.log('  1. SR. No. | 2. Enq No. | 3. EXPORT / DOMESTIC | 4. PO No.');
+    console.log('  5. DATE RECEIVED | 6. DATE SUBMITTED | 7. DRAWING | 8. COSTING');
+    console.log('  9. R&D | 10. SALES | 11. OPEN / CLOSED |12. ACTIVITY');
+    console.log('  13. SCOPE OF SUPPLY | 14. PRODUCT TYPE | 15. DAYS TO COMPLETE ENQUIRY | 16. REMARK');
+    
+    console.log('\nActual columns in Excel file:');
+    results.columnNames.forEach((col, idx) => {
+      console.log(`  ${idx + 1}. "${col}"`);
+    });
+    
+    // Validate column mapping
+    console.log('\n✅ Column Mapping Check:');
+    const allMappedColumns = new Set();
+    Object.entries(COLUMN_MAPPINGS).forEach(([fieldName, possibleNames]) => {
+      possibleNames.forEach(name => allMappedColumns.add(name));
+    });
+    
+    results.columnNames.forEach(col => {
+      const isMapped = Array.from(allMappedColumns).some(mappedCol => 
+        mappedCol.toLowerCase() === col.toLowerCase()
+      );
+      console.log(`  ${isMapped ? '✅' : '⚠️'} "${col}"`);
+    });
+    console.log('=============================================\n');
+    console.log('Expected Excel columns (16 total):');
+    console.log('  1. SR. No.');
+    console.log('  2. Enq No.');
+    console.log('  3. EXPORT / DOMESTIC');
+    console.log('  4. PO No.');
+    console.log('  5. DATE RECEIVED');
+    console.log('  6. DATE SUBMITTED');
+    console.log('  7. DRAWING');
+    console.log('  8. COSTING');
+    console.log('  9. R&D');
+    console.log('  10. SALES');
+    console.log('  11. OPEN / CLOSED');
+    console.log('  12. ACTIVITY');
+    console.log('  13. SCOPE OF SUPPLY');
+    console.log('  14. PRODUCT TYPE');
+    console.log('  15. DAYS TO COMPLETE ENQUIRY');
+    console.log('  16. REMARK');
+    
+    console.log('\nActual columns detected in Excel:');
+    results.columnNames.forEach((col, idx) => {
+      console.log(`  ${idx + 1}. "${col}"`);
+    });
+    
     // Log actual column names for debugging
     console.log('Excel columns detected:', results.columnNames);
     console.log('First row sample (all fields):', JSON.stringify(data[0], null, 2));
@@ -168,41 +196,42 @@ export const bulkImportEnquiries = async (req, res, next) => {
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
+      let enquiryNumber = 'Unknown'; // Initialize outside try block for catch block access
       
       try {
-        // Extract core data using flexible column mapping
-        const enquiryNumber = cleanString(getFieldValue(row, 'enquiryNumber'));
+        // ✅ IMPORTANT: Extract core data - use EXACT column matching from Excel
+        // The Excel column is exactly "Enq No." so we must match it precisely
+        const rawEnquiryNumber = row['Enq No.'] || row['Enq No'] || row['ENQ NO'];
+        enquiryNumber = cleanString(rawEnquiryNumber);
         const poNumber = cleanString(getFieldValue(row, 'poNumber'));
         
-        // Debug logging for first 3 rows
-        if (i < 3) {
-          console.log(`\n=== Row ${i + 1} Debug ===`);
-          console.log(`Enquiry Number extracted: "${enquiryNumber}"`);
-          console.log(`All row keys:`, Object.keys(row));
+        // Debug logging for first 10 rows
+        if (i < 10) {
+          console.log(`\n=== Row ${i + 1} - Data Extraction ===`);
+          console.log(`Excel columns available:`, Object.keys(row));
+          console.log(`Enq No. extracted: "${enquiryNumber}" (raw: "${rawEnquiryNumber}")`);
         }
         
-        // Skip if no enquiry number (empty row) unless superuser override is allowed
-        if (!enquiryNumber && !isSuperuser) {
-          if (i < 5) console.log(`Skipping row ${i + 1}: No enquiry number found`);
+        // Skip if no enquiry number (empty row)
+        if (!enquiryNumber) {
+          if (i < 10) console.log(`⚠️ Row ${i + 1}: Skipped (no enquiry number)`);
           continue;
         }
         
         // Market Segment (EXPORT / DOMESTIC)
         const marketType = standardizeMarketSegment(getFieldValue(row, 'marketType'));
         
-        // Dates
-        const dateReceived = parseExcelDate(getFieldValue(row, 'dateReceived'));
-        const dateSubmitted = parseExcelDate(getFieldValue(row, 'dateSubmitted'));
+        // ✅ DATES: Must extract directly from Excel and parse correctly
+        const rawDateReceived = row['DATE RECEIVED'] || row['Date Received'];
+        const rawDateSubmitted = row['DATE SUBMITTED'] || row['Date Submitted'];
+        
+        const dateReceived = parseExcelDate(rawDateReceived);
+        const dateSubmitted = parseExcelDate(rawDateSubmitted);
         const enquiryDate = dateReceived || new Date();
         
-        // Debug first few rows
-        if (i < 3) {
-          console.log(`Row ${i + 1} dates:`, {
-            rawReceived: getFieldValue(row, 'dateReceived'),
-            rawSubmitted: getFieldValue(row, 'dateSubmitted'),
-            parsedReceived: dateReceived,
-            parsedSubmitted: dateSubmitted
-          });
+        // Debug dates for first 10 rows
+        if (i < 10) {
+          console.log(`Dates: Recv="${rawDateReceived}"→${dateReceived} | Subm="${rawDateSubmitted}"→${dateSubmitted}`);
         }
         
         // Requirements (Y/N boolean fields)
@@ -234,11 +263,14 @@ export const bulkImportEnquiries = async (req, res, next) => {
         // Remarks
         const remarks = cleanString(getFieldValue(row, 'remarks')) || 'No remarks';
         
-        // Create enquiry data object
+        // ✅ Create enquiry data object - INCLUDE ALL FIELDS WITH ACTUAL EXCEL VALUES
         const enquiryData = {
-          enquiryNumber,
-          customerName: `Customer-${enquiryNumber}`, // Excel doesn't have customer names
+          enquiryNumber,  // Use actual Excel enquiry number (not auto-generated)
+          customerName: `Customer-${enquiryNumber}`,
           enquiryDate,
+          dateReceived,    // ✅ IMPORTANT: Include dateReceived
+          dateSubmitted,   // ✅ IMPORTANT: Include dateSubmitted
+          quoteDate: dateSubmitted,
           marketType,
           productType,
           supplyScope: supplyScope || 'Not specified',
@@ -247,6 +279,11 @@ export const bulkImportEnquiries = async (req, res, next) => {
           remarks,
           createdBy: req.user.id,
         };
+        
+        // Debug for first 5 rows
+        if (i < 5) {
+          console.log(`📝 Enquiry#${enquiryNumber}: dates=${dateReceived ? 'YES' : 'NO'}, market=${marketType}, activity=${activity}`);
+        }
         
         // Add optional fields
         if (poNumber && poNumber !== '-') enquiryData.poNumber = poNumber;
@@ -293,67 +330,127 @@ export const bulkImportEnquiries = async (req, res, next) => {
         }
 
         // DYNAMIC FIELDS HANDLING
-        // Get all known static field keys
-        const staticFieldKeys = [
-          'SR. No.', 'Enq No.', 'EXPORT / DOMESTIC', 'PO No.',
-          'DATE RECEIVED', 'DATE SUBMITTED', 'DRAWING', 'COSTING',
-          'R&D', 'SALES', 'OPEN / CLOSED', 'ACTIVITY',
-          'SCOPE OF SUPPLY', 'PRODUCT TYPE', 'DAYS TO COMPLETE ENQUIRY', 'REMARK',
-          'enquiryNumber', 'poNumber', 'marketType', 'productType',
-          'dateReceived', 'dateSubmitted', 'supplyScope', 'status', 'activity',
-          'remarks', 'quantity', 'estimatedValue', 'drawingStatus',
-          'costingStatus', 'rndStatus', 'salesStatus', 'manufacturingType'
+        // ✅ IMPORTANT: Capture ALL columns from Excel
+        // Strategy: Map known columns to schema fields, store unknown columns in dynamicFields
+        
+        const dynamicFields = {};
+        
+        // All Excel column keys (normalized)
+        const excelColumnKeys = Object.keys(row);
+        
+        // Known Excel columns that map to static schema fields
+        const mappedColumns = [
+          ...Object.values(COLUMN_MAPPINGS).flat(),
+          // Also include already-processed fields
+          'sr_no', 'enquiry_number', 'market_segment', 'po_number', 'date_received',
+          'date_submitted', 'drawing', 'costing', 'rnd_handler', 'sales_rep',
+          'status_field', 'activity_field', 'supply_scope', 'product_type_field',
+          'days_required', 'remarks_field'
         ];
 
-        const dynamicFields = {};
-
-        // Process all row keys to find dynamic fields
+        // Process ALL row columns
         for (const [key, value] of Object.entries(row)) {
-          if (value && cleanString(value) !== '' && !staticFieldKeys.some(sf => sf.toLowerCase() === key.toLowerCase())) {
-            // This is a potential dynamic field
+          // Skip empty columns
+          if (!value || cleanString(value) === '') {
+            continue;
+          }
+
+          const cleanKey = cleanString(key);
+          
+          // Check if this column was already processed as a static field
+          const isProcessedField = Object.values(COLUMN_MAPPINGS).flat()
+            .some(colName => colName.toLowerCase() === key.toLowerCase() ||
+                            colName.toLowerCase() === cleanKey);
+          
+          // If NOT a processed static field, treat as dynamic field
+          if (!isProcessedField) {
             try {
-              let customField = await CustomField.findOne({ label: key });
+              // Normalize the column name for field names
+              const fieldName = key
+                .toLowerCase()
+                .replace(/\s+/g, '_')        // spaces → underscore
+                .replace(/[&/]+/g, 'and')    // & / → and
+                .replace(/[^a-z0-9_]/g, '')  // remove special chars
+                .replace(/_+/g, '_')         // collapse multiple underscores
+                .slice(0, 50);               // max 50 chars
+              
+              if (!fieldName) {
+                // Skip if field name becomes empty after normalization
+                if (i < 3) console.log(`Skipping column with invalid name: "${key}"`);
+                continue;
+              }
+
+              let customField = await CustomField.findOne({ name: fieldName });
               
               if (!customField) {
                 // If superuser, auto-create the field
                 if (isSuperuser) {
-                  const fieldName = key.toLowerCase().replace(/\s+/g, '_');
-                  customField = await CustomField.create({
-                    name: fieldName,
-                    label: key,
-                    type: 'text',
-                    createdBy: req.user.id,
-                  });
+                  try {
+                    customField = await CustomField.create({
+                      name: fieldName,
+                      label: key,  // Keep original Excel column name as display label
+                      type: 'text',
+                      createdBy: req.user.id,
+                    });
+                    if (i < 5) console.log(`✅ Auto-created custom field: "${key}" → field name: "${fieldName}"`);
+                  } catch (createError) {
+                    if (i < 5) console.log(`⚠️ Could not auto-create field "${fieldName}": ${createError.message}`);
+                    // Still store in dynamic fields, might be a duplicate
+                    dynamicFields[fieldName] = value;
+                    continue;
+                  }
                 } else {
-                  // Skip unknown fields for non-superuser
-                  if (i < 3) console.log(`Skipping unknown field for non-superuser: "${key}"`);
+                  // For non-superuser, still capture in dynamicFields so data isn't lost
+                  if (i < 5) console.log(`📝 Capturing unknown field for non-superuser: "${key}" → "${fieldName}"`);
+                  dynamicFields[fieldName] = value;
                   continue;
                 }
               }
 
-              // Store dynamic field value
+              // ✅ Store dynamic field value
               dynamicFields[customField.name] = value;
+              
             } catch (fieldError) {
-              console.log(`Error processing dynamic field "${key}":`, fieldError.message);
+              console.log(`⚠️ Error processing dynamic field "${key}":`, fieldError.message);
+              // Still try to capture it
+              const fallbackName = key.toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 50);
+              if (fallbackName) {
+                dynamicFields[fallbackName] = value;
+              }
             }
           }
         }
 
-        // Add dynamic fields to enquiry data
+        // ✅ Add dynamic fields to enquiry data (always add, even if empty)
         if (Object.keys(dynamicFields).length > 0) {
           enquiryData.dynamicFields = dynamicFields;
+          if (i < 3) console.log(`Row ${i + 1} dynamic fields:`, Object.keys(dynamicFields));
         }
         
         // Check if enquiry already exists and update instead of creating
         const existingEnquiry = enquiryNumber
           ? await Enquiry.findOne({ enquiryNumber })
           : null;
+        
+        if (i < 10) {
+          console.log(`\n✅ Ready to save Enquiry #${enquiryNumber}:`);
+          console.log(`   enquiryNumber: "${enquiryData.enquiryNumber}" (will use this, NOT auto-generate)`);
+          console.log(`   dateReceived: ${enquiryData.dateReceived}`);
+          console.log(`   dateSubmitted: ${enquiryData.dateSubmitted}`);
+          console.log(`   drawingStatus: ${enquiryData.drawingStatus}`);
+          console.log(`   costingStatus: ${enquiryData.costingStatus}`);
+          console.log(`   marketType: ${enquiryData.marketType}`);
+          console.log(`   activity: ${enquiryData.activity}`);
+          console.log(`   Existing? ${existingEnquiry ? 'YES (will update)' : 'NO (will create)'}`);
+        }
+        
         if (existingEnquiry) {
           await Enquiry.findByIdAndUpdate(existingEnquiry._id, enquiryData);
-          console.log(`Updated existing enquiry: ${enquiryNumber}`);
+          if (i < 10) console.log(`   ✅ Updated existing enquiry`);
           results.updated++;
         } else {
           await Enquiry.create(enquiryData);
+          if (i < 10) console.log(`   ✅ Created new enquiry`);
           results.created++;
         }
         results.successful++;
@@ -367,6 +464,37 @@ export const bulkImportEnquiries = async (req, res, next) => {
         });
       }
     }
+
+    // ✅ FINAL IMPORT SUMMARY - Show which columns were processed
+    console.log('\n📊 ============= IMPORT SUMMARY =============');
+    console.log(`Total rows processed: ${results.successful}`);
+    console.log(`Successfully imported: ${results.created}`);
+    console.log(`Updated: ${results.updated}`);
+    console.log(`Failed: ${results.failed}`);
+    
+    if (results.errors.length > 0) {
+      console.log(`\n❌ Errors encountered:`);
+      results.errors.slice(0, 10).forEach(err => {
+        console.log(`  Row ${err.row}: ${err.error}`);
+      });
+      if (results.errors.length > 10) {
+        console.log(`  ... and ${results.errors.length - 10} more errors`);
+      }
+    }
+    
+    console.log('\n✅ Expected 16 Columns Capture Status:');
+    const expectedColumns = [
+      'SR. No.', 'Enq No.', 'EXPORT / DOMESTIC', 'PO No.',
+      'DATE RECEIVED', 'DATE SUBMITTED', 'DRAWING', 'COSTING',
+      'R&D', 'SALES', 'OPEN / CLOSED', 'ACTIVITY',
+      'SCOPE OF SUPPLY', 'PRODUCT TYPE', 'DAYS TO COMPLETE ENQUIRY', 'REMARK'
+    ];
+    
+    expectedColumns.forEach((col, idx) => {
+      const found = results.columnNames.includes(col);
+      console.log(`  ${idx + 1}. ${found ? '✅' : '❌'} "${col}"`);
+    });
+    console.log('==========================================\n');
 
     // Delete the uploaded file after processing
     if (filePath && fs.existsSync(filePath)) {

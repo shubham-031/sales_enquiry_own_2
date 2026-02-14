@@ -1,6 +1,58 @@
 import User from '../models/User.js';
 import { ApiError } from '../middlewares/errorHandler.js';
 
+const normalizeDepartment = (role, department) => {
+  if (department) return department;
+  switch (role) {
+    case 'sales':
+      return 'Sales';
+    case 'r&d':
+      return 'R&D';
+    case 'management':
+      return 'Management';
+    case 'superuser':
+      return 'Superuser';
+    default:
+      return 'Sales';
+  }
+};
+
+// @desc    Create user
+// @route   POST /api/users
+// @access  Private (Superuser)
+export const createUser = async (req, res, next) => {
+  try {
+    const { name, email, password, role, department, phone } = req.body;
+
+    if (!name || !email || !password) {
+      throw new ApiError(400, 'Name, email, and password are required');
+    }
+
+    const existing = await User.findOne({ email });
+    if (existing) {
+      throw new ApiError(400, 'User already exists');
+    }
+
+    const user = await User.create({
+      name,
+      email,
+      password,
+      role: role || 'sales',
+      department: normalizeDepartment(role || 'sales', department),
+      phone,
+    });
+
+    const sanitized = await User.findById(user._id).select('-password');
+
+    res.status(201).json({
+      success: true,
+      data: sanitized,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // @desc    Get all users
 // @route   GET /api/users
 // @access  Private (Admin, Management)
