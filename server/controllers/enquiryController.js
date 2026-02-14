@@ -75,16 +75,39 @@ export const createEnquiry = async (req, res, next) => {
   try {
     // Separate static and dynamic fields
     const staticFields = [
-      'enquiryNumber', 'poNumber', 'customerName', 'enquiryDate', 'dateReceived',
-      'dateSubmitted', 'marketType', 'productType', 'supplyScope', 'quantity',
-      'estimatedValue', 'drawingStatus', 'costingStatus', 'rndStatus', 'salesStatus',
-      'manufacturingType', 'salesRepresentative', 'salesRepName', 'rndHandler',
-      'rndHandlerName', 'status', 'activity', 'quotationDate', 'fulfillmentTime',
-      'daysRequiredForFulfillment', 'closureDate', 'remarks', 'attachments'
+      'enquiryNumber',
+      'poNumber',
+      'customerName',
+      'enquiryDate',
+      'dateReceived',
+      'dateSubmitted',
+      'marketType',
+      'productType',
+      'supplyScope',
+      'quantity',
+      'estimatedValue',
+      'drawingStatus',
+      'costingStatus',
+      'rndStatus',
+      'salesStatus',
+      'manufacturingType',
+      'salesRepresentative',
+      'salesRepName',
+      'rndHandler',
+      'rndHandlerName',
+      'status',
+      'activity',
+      'quotationDate',
+      'fulfillmentTime',
+      'daysRequiredForFulfillment',
+      'closureDate',
+      'remarks',
+      'attachments',
+      'dynamicFields', // ✅ IMPORTANT: if frontend sends nested dynamicFields
     ];
 
-    const dynamicFields = {};
     const enquiryData = {};
+    const dynamicFields = {};
 
     // Separate dynamic from static fields
     for (const [key, value] of Object.entries(req.body)) {
@@ -95,13 +118,26 @@ export const createEnquiry = async (req, res, next) => {
       }
     }
 
+    // Attach metadata
     enquiryData.createdBy = req.user.id;
+
+    // Aashish logic: creator becomes sales rep by default
     enquiryData.salesRepName = req.user.name;
     enquiryData.salesRepresentative = req.user.id;
 
-    // Add dynamic fields to the enquiry
-    if (Object.keys(dynamicFields).length > 0) {
-      enquiryData.dynamicFields = dynamicFields;
+    // ✅ Handle dynamic fields:
+    // Case 1: frontend sends { dynamicFields: {...} }
+    // Case 2: backend receives extra keys that are dynamic
+    const nestedDynamic = enquiryData.dynamicFields && typeof enquiryData.dynamicFields === 'object'
+      ? enquiryData.dynamicFields
+      : {};
+
+    const mergedDynamic = { ...nestedDynamic, ...dynamicFields };
+
+    if (Object.keys(mergedDynamic).length > 0) {
+      enquiryData.dynamicFields = mergedDynamic;
+    } else {
+      delete enquiryData.dynamicFields;
     }
 
     const enquiry = await Enquiry.create(enquiryData);
@@ -117,7 +153,7 @@ export const createEnquiry = async (req, res, next) => {
 
 // @desc    Update enquiry
 // @route   PUT /api/enquiries/:id
-// @access  Private (Sales, R&D, Superuser)
+// @access  Private (Sales, R&D, Admin) - Field permissions enforced
 export const updateEnquiry = async (req, res, next) => {
   try {
     let enquiry = await Enquiry.findById(req.params.id);
@@ -126,20 +162,52 @@ export const updateEnquiry = async (req, res, next) => {
       throw new ApiError(404, 'Enquiry not found');
     }
 
+    // Aashish behavior:
+    // If permission middleware filtered all fields out, req.body becomes empty
+    if (Object.keys(req.body).length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: `Your role (${req.user.role}) does not have permission to edit the requested fields`,
+      });
+    }
+
     // Separate static and dynamic fields
     const staticFields = [
-      'enquiryNumber', 'poNumber', 'customerName', 'enquiryDate', 'dateReceived',
-      'dateSubmitted', 'marketType', 'productType', 'supplyScope', 'quantity',
-      'estimatedValue', 'drawingStatus', 'costingStatus', 'rndStatus', 'salesStatus',
-      'manufacturingType', 'salesRepresentative', 'salesRepName', 'rndHandler',
-      'rndHandlerName', 'status', 'activity', 'quotationDate', 'fulfillmentTime',
-      'daysRequiredForFulfillment', 'closureDate', 'remarks', 'attachments'
+      'enquiryNumber',
+      'poNumber',
+      'customerName',
+      'enquiryDate',
+      'dateReceived',
+      'dateSubmitted',
+      'marketType',
+      'productType',
+      'supplyScope',
+      'quantity',
+      'estimatedValue',
+      'drawingStatus',
+      'costingStatus',
+      'rndStatus',
+      'salesStatus',
+      'manufacturingType',
+      'salesRepresentative',
+      'salesRepName',
+      'rndHandler',
+      'rndHandlerName',
+      'status',
+      'activity',
+      'quotationDate',
+      'fulfillmentTime',
+      'daysRequiredForFulfillment',
+      'closureDate',
+      'remarks',
+      'attachments',
+      'dynamicFields', // ✅ allow nested dynamicFields updates too
     ];
 
     const updateData = { updatedBy: req.user.id };
     const dynamicUpdates = {};
 
-    // Separate static and dynamic fields
+    // Split updates
     for (const [key, value] of Object.entries(req.body)) {
       if (staticFields.includes(key)) {
         updateData[key] = value;
@@ -148,21 +216,36 @@ export const updateEnquiry = async (req, res, next) => {
       }
     }
 
-    // Merge dynamic fields
-    if (Object.keys(dynamicUpdates).length > 0) {
-      updateData.dynamicFields = {
-        ...enquiry.dynamicFields,
-        ...dynamicUpdates,
-      };
+    // ✅ Merge dynamic fields safely:
+    // - if request contains nested dynamicFields, merge that too
+    const nestedDynamic =
+      updateData.dynamicFields && typeof updateData.dynamicFields === 'object'
+        ? updateData.dynamicFields
+        : {};
+
+    const mergedDynamic = {
+      ...(enquiry.dynamicFields || {}),
+      ...nestedDynamic,
+      ...dynamicUpdates,
+    };
+
+    if (Object.keys(mergedDynamic).length > 0) {
+      updateData.dynamicFields = mergedDynamic;
+    } else {
+      delete updateData.dynamicFields;
     }
 
     enquiry = await Enquiry.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true,
-    });
+    })
+      .populate('salesRepresentative', 'name email department')
+      .populate('rndHandler', 'name email department')
+      .populate('updatedBy', 'name email');
 
     res.status(200).json({
       success: true,
+      message: 'Enquiry updated successfully',
       data: enquiry,
     });
   } catch (error) {

@@ -18,11 +18,14 @@ import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 import { enquiryService } from '../../services/enquiryService';
 import axios from '../../utils/axios';
+import useAuthStore from '../../store/authStore';
 
 const EnquiryForm = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEditMode = Boolean(id);
+  const { user } = useAuthStore();
+  const userRole = user?.role || 'sales';
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -30,6 +33,19 @@ const EnquiryForm = () => {
   const [salesUsers, setSalesUsers] = useState([]);
   const [rndUsers, setRndUsers] = useState([]);
   const [customFields, setCustomFields] = useState([]);
+
+  // Helper functions to determine field visibility based on role
+  const canEditSalesFields = () => {
+    return userRole === 'admin' || userRole === 'sales';
+  };
+
+  const canEditRndFields = () => {
+    return userRole === 'admin' || userRole === 'r&d';
+  };
+
+  const isManagement = () => {
+    return userRole === 'management';
+  };
 
   const [formData, setFormData] = useState({
     customerName: '',
@@ -64,6 +80,7 @@ const EnquiryForm = () => {
     if (isEditMode) {
       fetchEnquiry();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchUsers = async () => {
@@ -90,7 +107,7 @@ const EnquiryForm = () => {
     try {
       setLoading(true);
       const data = await enquiryService.getEnquiryById(id);
-      
+
       // Format dates for input fields
       const formattedData = {
         ...data,
@@ -101,8 +118,8 @@ const EnquiryForm = () => {
         rndHandler: data.rndHandler?._id || '',
         dynamicFields: data.dynamicFields || {},
       };
-      
-      setFormData(formattedData);
+
+      setFormData((prev) => ({ ...prev, ...formattedData }));
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to fetch enquiry');
     } finally {
@@ -112,10 +129,6 @@ const EnquiryForm = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
 
     // Auto-set status based on activity
     if (name === 'activity') {
@@ -124,21 +137,27 @@ const EnquiryForm = () => {
       } else {
         setFormData((prev) => ({ ...prev, activity: value, status: 'Open' }));
       }
+      return;
     }
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   const handleDynamicFieldChange = (fieldName, value) => {
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       dynamicFields: {
-        ...formData.dynamicFields,
+        ...prev.dynamicFields,
         [fieldName]: value,
       },
-    });
+    }));
   };
 
   const renderDynamicField = (field) => {
-    const value = formData.dynamicFields[field.name] || '';
+    const value = formData.dynamicFields[field.name] ?? '';
 
     switch (field.type) {
       case 'number':
@@ -194,7 +213,7 @@ const EnquiryForm = () => {
             helperText={field.description}
           >
             <MenuItem value="">None</MenuItem>
-            {field.options.map((opt) => (
+            {field.options?.map((opt) => (
               <MenuItem key={opt} value={opt}>
                 {opt}
               </MenuItem>
@@ -224,7 +243,7 @@ const EnquiryForm = () => {
 
     try {
       setLoading(true);
-      
+
       if (isEditMode) {
         await enquiryService.updateEnquiry(id, formData);
         setSuccess('Enquiry updated successfully!');
@@ -241,10 +260,6 @@ const EnquiryForm = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleCancel = () => {
-    navigate('/enquiries');
   };
 
   if (loading && isEditMode) {
@@ -282,162 +297,186 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Customer Name"
-                name="customerName"
-                value={formData.customerName}
-                onChange={handleChange}
-                placeholder="Optional - will auto-generate if empty"
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  label="Customer Name"
+                  name="customerName"
+                  value={formData.customerName}
+                  onChange={handleChange}
+                  placeholder="Optional - will auto-generate if empty"
+                />
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Enquiry Date"
-                name="enquiryDate"
-                value={formData.enquiryDate}
-                onChange={handleChange}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Enquiry Date"
+                  name="enquiryDate"
+                  value={formData.enquiryDate}
+                  onChange={handleChange}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                required
-                fullWidth
-                select
-                label="Market Type"
-                name="marketType"
-                value={formData.marketType}
-                onChange={handleChange}
-              >
-                <MenuItem value="Domestic">Domestic</MenuItem>
-                <MenuItem value="Export">Export</MenuItem>
-              </TextField>
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  required
+                  fullWidth
+                  select
+                  label="Market Type"
+                  name="marketType"
+                  value={formData.marketType}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="Domestic">Domestic</MenuItem>
+                  <MenuItem value="Export">Export</MenuItem>
+                </TextField>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                required
-                fullWidth
-                select
-                label="Product Type"
-                name="productType"
-                value={formData.productType}
-                onChange={handleChange}
-              >
-                <MenuItem value="SP">SP (Speciality Products)</MenuItem>
-                <MenuItem value="NSP">NSP (Non-Speciality Products)</MenuItem>
-                <MenuItem value="SP+NSP">SP+NSP (Both)</MenuItem>
-                <MenuItem value="Other">Other</MenuItem>
-              </TextField>
-            </Grid>
+            {canEditRndFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  required
+                  fullWidth
+                  select
+                  label="Product Type"
+                  name="productType"
+                  value={formData.productType}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="SP">SP (Speciality Products)</MenuItem>
+                  <MenuItem value="NSP">NSP (Non-Speciality Products)</MenuItem>
+                  <MenuItem value="SP+NSP">SP+NSP (Both)</MenuItem>
+                  <MenuItem value="Other">Other</MenuItem>
+                </TextField>
+              </Grid>
+            )}
 
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Supply Scope"
-                name="supplyScope"
-                value={formData.supplyScope}
-                onChange={handleChange}
-                multiline
-                rows={2}
-                placeholder="Enter supply scope details..."
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Supply Scope"
+                  name="supplyScope"
+                  value={formData.supplyScope}
+                  onChange={handleChange}
+                  multiline
+                  rows={2}
+                  placeholder="Enter supply scope details..."
+                />
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                label="PO Number"
-                name="poNumber"
-                value={formData.poNumber}
-                onChange={handleChange}
-                placeholder="Enter PO number..."
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  label="PO Number"
+                  name="poNumber"
+                  value={formData.poNumber}
+                  onChange={handleChange}
+                  placeholder="Enter PO number..."
+                />
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Quantity"
-                name="quantity"
-                value={formData.quantity}
-                onChange={handleChange}
-                placeholder="Enter quantity..."
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Quantity"
+                  name="quantity"
+                  value={formData.quantity}
+                  onChange={handleChange}
+                  placeholder="Enter quantity..."
+                />
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={4}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Estimated Value"
-                name="estimatedValue"
-                value={formData.estimatedValue}
-                onChange={handleChange}
-                placeholder="Enter estimated value..."
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={4}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Estimated Value"
+                  name="estimatedValue"
+                  value={formData.estimatedValue}
+                  onChange={handleChange}
+                  placeholder="Enter estimated value..."
+                />
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Date Received"
-                name="dateReceived"
-                value={formData.dateReceived}
-                onChange={handleChange}
-                InputLabelProps={{ shrink: true }}
-                helperText="Date when enquiry was received"
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Date Received"
+                  name="dateReceived"
+                  value={formData.dateReceived}
+                  onChange={handleChange}
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Date when enquiry was received"
+                />
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Date Submitted"
-                name="dateSubmitted"
-                value={formData.dateSubmitted}
-                onChange={handleChange}
-                InputLabelProps={{ shrink: true }}
-                helperText="Date when quote/response was submitted"
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Date Submitted"
+                  name="dateSubmitted"
+                  value={formData.dateSubmitted}
+                  onChange={handleChange}
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Date when quote/response was submitted"
+                />
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                select
-                label="Manufacturing Type"
-                name="manufacturingType"
-                value={formData.manufacturingType}
-                onChange={handleChange}
-              >
-                <MenuItem value="">Select Type</MenuItem>
-                <MenuItem value="Inhouse">Inhouse</MenuItem>
-                <MenuItem value="Broughtout">Broughtout</MenuItem>
-                <MenuItem value="Both">Both</MenuItem>
-              </TextField>
-            </Grid>
+            {canEditRndFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Manufacturing Type"
+                  name="manufacturingType"
+                  value={formData.manufacturingType}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="">Select Type</MenuItem>
+                  <MenuItem value="Inhouse">Inhouse</MenuItem>
+                  <MenuItem value="Broughtout">Broughtout</MenuItem>
+                  <MenuItem value="Both">Both</MenuItem>
+                </TextField>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="number"
-                label="Days Required for Fulfillment"
-                name="daysRequiredForFulfillment"
-                value={formData.daysRequiredForFulfillment}
-                onChange={handleChange}
-                placeholder="Expected days for fulfillment..."
-              />
-            </Grid>
+            {canEditRndFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="number"
+                  label="Days Required for Fulfillment"
+                  name="daysRequiredForFulfillment"
+                  value={formData.daysRequiredForFulfillment}
+                  onChange={handleChange}
+                  placeholder="Expected days for fulfillment..."
+                />
+              </Grid>
+            )}
           </Grid>
 
           {/* Department Status */}
@@ -447,69 +486,77 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6} lg={3}>
-              <TextField
-                fullWidth
-                select
-                label="Drawing Status"
-                name="drawingStatus"
-                value={formData.drawingStatus}
-                onChange={handleChange}
-              >
-                <MenuItem value="Pending">Pending</MenuItem>
-                <MenuItem value="In Progress">In Progress</MenuItem>
-                <MenuItem value="Completed">Completed</MenuItem>
-                <MenuItem value="Not Required">Not Required</MenuItem>
-              </TextField>
-            </Grid>
+            {canEditRndFields() && (
+              <Grid item xs={12} md={6} lg={3}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Drawing Status"
+                  name="drawingStatus"
+                  value={formData.drawingStatus}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="Pending">Pending</MenuItem>
+                  <MenuItem value="In Progress">In Progress</MenuItem>
+                  <MenuItem value="Completed">Completed</MenuItem>
+                  <MenuItem value="Not Required">Not Required</MenuItem>
+                </TextField>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6} lg={3}>
-              <TextField
-                fullWidth
-                select
-                label="Costing Status"
-                name="costingStatus"
-                value={formData.costingStatus}
-                onChange={handleChange}
-              >
-                <MenuItem value="Pending">Pending</MenuItem>
-                <MenuItem value="In Progress">In Progress</MenuItem>
-                <MenuItem value="Completed">Completed</MenuItem>
-                <MenuItem value="Not Required">Not Required</MenuItem>
-              </TextField>
-            </Grid>
+            {canEditRndFields() && (
+              <Grid item xs={12} md={6} lg={3}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Costing Status"
+                  name="costingStatus"
+                  value={formData.costingStatus}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="Pending">Pending</MenuItem>
+                  <MenuItem value="In Progress">In Progress</MenuItem>
+                  <MenuItem value="Completed">Completed</MenuItem>
+                  <MenuItem value="Not Required">Not Required</MenuItem>
+                </TextField>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6} lg={3}>
-              <TextField
-                fullWidth
-                select
-                label="R&D Status"
-                name="rndStatus"
-                value={formData.rndStatus}
-                onChange={handleChange}
-              >
-                <MenuItem value="Pending">Pending</MenuItem>
-                <MenuItem value="In Progress">In Progress</MenuItem>
-                <MenuItem value="Completed">Completed</MenuItem>
-                <MenuItem value="Not Required">Not Required</MenuItem>
-              </TextField>
-            </Grid>
+            {canEditRndFields() && (
+              <Grid item xs={12} md={6} lg={3}>
+                <TextField
+                  fullWidth
+                  select
+                  label="R&D Status"
+                  name="rndStatus"
+                  value={formData.rndStatus}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="Pending">Pending</MenuItem>
+                  <MenuItem value="In Progress">In Progress</MenuItem>
+                  <MenuItem value="Completed">Completed</MenuItem>
+                  <MenuItem value="Not Required">Not Required</MenuItem>
+                </TextField>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6} lg={3}>
-              <TextField
-                fullWidth
-                select
-                label="Sales Status"
-                name="salesStatus"
-                value={formData.salesStatus}
-                onChange={handleChange}
-              >
-                <MenuItem value="Pending">Pending</MenuItem>
-                <MenuItem value="In Progress">In Progress</MenuItem>
-                <MenuItem value="Completed">Completed</MenuItem>
-                <MenuItem value="Not Required">Not Required</MenuItem>
-              </TextField>
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6} lg={3}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Sales Status"
+                  name="salesStatus"
+                  value={formData.salesStatus}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="Pending">Pending</MenuItem>
+                  <MenuItem value="In Progress">In Progress</MenuItem>
+                  <MenuItem value="Completed">Completed</MenuItem>
+                  <MenuItem value="Not Required">Not Required</MenuItem>
+                </TextField>
+              </Grid>
+            )}
           </Grid>
 
           {/* Team Assignment */}
@@ -519,43 +566,47 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                required
-                fullWidth
-                select
-                label="Sales Representative"
-                name="salesRepresentative"
-                value={formData.salesRepresentative}
-                onChange={handleChange}
-              >
-                <MenuItem value="">Select Sales Rep</MenuItem>
-                {salesUsers.map((user) => (
-                  <MenuItem key={user._id} value={user._id}>
-                    {user.name} ({user.email})
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  required
+                  fullWidth
+                  select
+                  label="Sales Representative"
+                  name="salesRepresentative"
+                  value={formData.salesRepresentative}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="">Select Sales Rep</MenuItem>
+                  {salesUsers.map((u) => (
+                    <MenuItem key={u._id} value={u._id}>
+                      {u.name} ({u.email})
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                required
-                fullWidth
-                select
-                label="R&D Handler"
-                name="rndHandler"
-                value={formData.rndHandler}
-                onChange={handleChange}
-              >
-                <MenuItem value="">Select R&D Handler</MenuItem>
-                {rndUsers.map((user) => (
-                  <MenuItem key={user._id} value={user._id}>
-                    {user.name} ({user.email})
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
+            {canEditRndFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  required
+                  fullWidth
+                  select
+                  label="R&D Handler"
+                  name="rndHandler"
+                  value={formData.rndHandler}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="">Select R&D Handler</MenuItem>
+                  {rndUsers.map((u) => (
+                    <MenuItem key={u._id} value={u._id}>
+                      {u.name} ({u.email})
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            )}
           </Grid>
 
           {/* Status & Activity */}
@@ -565,65 +616,73 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            <Grid item xs={12} md={6}>
-              <TextField
-                required
-                fullWidth
-                select
-                label="Activity"
-                name="activity"
-                value={formData.activity}
-                onChange={handleChange}
-              >
-                <MenuItem value="In Progress">In Progress</MenuItem>
-                <MenuItem value="On Hold">On Hold</MenuItem>
-                <MenuItem value="Quoted">Quoted</MenuItem>
-                <MenuItem value="Regretted">Regretted</MenuItem>
-              </TextField>
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  required
+                  fullWidth
+                  select
+                  label="Activity"
+                  name="activity"
+                  value={formData.activity}
+                  onChange={handleChange}
+                >
+                  <MenuItem value="In Progress">In Progress</MenuItem>
+                  <MenuItem value="On Hold">On Hold</MenuItem>
+                  <MenuItem value="Quoted">Quoted</MenuItem>
+                  <MenuItem value="Regretted">Regretted</MenuItem>
+                </TextField>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                required
-                fullWidth
-                select
-                label="Status"
-                name="status"
-                value={formData.status}
-                onChange={handleChange}
-                disabled
-              >
-                <MenuItem value="Open">Open</MenuItem>
-                <MenuItem value="Closed">Closed</MenuItem>
-              </TextField>
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  required
+                  fullWidth
+                  select
+                  label="Status"
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  disabled
+                >
+                  <MenuItem value="Open">Open</MenuItem>
+                  <MenuItem value="Closed">Closed</MenuItem>
+                </TextField>
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Quotation Date"
-                name="quotationDate"
-                value={formData.quotationDate}
-                onChange={handleChange}
-                InputLabelProps={{ shrink: true }}
-                helperText="Date when quote was sent to customer"
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Quotation Date"
+                  name="quotationDate"
+                  value={formData.quotationDate}
+                  onChange={handleChange}
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Date when quote was sent to customer"
+                />
+              </Grid>
+            )}
 
-            <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                type="date"
-                label="Closure Date"
-                name="closureDate"
-                value={formData.closureDate}
-                onChange={handleChange}
-                InputLabelProps={{ shrink: true }}
-                helperText="Date when enquiry was closed"
-                disabled={formData.status !== 'Closed'}
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12} md={6}>
+                <TextField
+                  fullWidth
+                  type="date"
+                  label="Closure Date"
+                  name="closureDate"
+                  value={formData.closureDate}
+                  onChange={handleChange}
+                  InputLabelProps={{ shrink: true }}
+                  helperText="Date when enquiry was closed"
+                  disabled={formData.status !== 'Closed'}
+                />
+              </Grid>
+            )}
           </Grid>
 
           {/* Additional Information */}
@@ -633,18 +692,20 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Remarks"
-                name="remarks"
-                value={formData.remarks}
-                onChange={handleChange}
-                multiline
-                rows={3}
-                placeholder="Enter any additional remarks..."
-              />
-            </Grid>
+            {canEditSalesFields() && (
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Remarks"
+                  name="remarks"
+                  value={formData.remarks}
+                  onChange={handleChange}
+                  multiline
+                  rows={3}
+                  placeholder="Enter any additional remarks..."
+                />
+              </Grid>
+            )}
           </Grid>
 
           {/* Custom Dynamic Fields */}
@@ -664,13 +725,29 @@ const EnquiryForm = () => {
             </>
           )}
 
+          {/* Management Read-Only Warning */}
+          {isManagement() && (
+            <Alert severity="info" sx={{ mt: 3 }}>
+              ⚠️ You have read-only access. You cannot edit this enquiry.
+            </Alert>
+          )}
+
+          {/* Role-Based Field Visibility Info */}
+          {!isManagement() && (
+            <Alert severity="info" sx={{ mt: 3 }}>
+              {userRole === 'sales' && '💼 You are viewing Sales fields only. R&D fields are hidden.'}
+              {userRole === 'r&d' && '🔬 You are viewing R&D fields only. Sales fields are hidden.'}
+              {userRole === 'admin' && '👑 You have full access to all fields.'}
+            </Alert>
+          )}
+
           {/* Form Actions */}
           <Box sx={{ mt: 4, display: 'flex', gap: 2 }}>
             <Button
               type="submit"
               variant="contained"
               startIcon={<SaveIcon />}
-              disabled={loading}
+              disabled={loading || isManagement()}
             >
               {isEditMode ? 'Update Enquiry' : 'Create Enquiry'}
             </Button>
@@ -680,7 +757,7 @@ const EnquiryForm = () => {
               onClick={() => navigate('/enquiries')}
               disabled={loading}
             >
-              Cancel
+              {isManagement() ? 'Close' : 'Cancel'}
             </Button>
           </Box>
         </form>
