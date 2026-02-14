@@ -391,7 +391,7 @@ const EnquiryDetails = () => {
       </Paper>
 
       {/* Additional Information */}
-      <Paper sx={{ p: 3 }}>
+      <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom display="flex" alignItems="center">
           <AssignmentIcon sx={{ mr: 1 }} />
           Additional Information
@@ -442,6 +442,40 @@ const EnquiryDetails = () => {
           )}
         </Grid>
       </Paper>
+
+      {/* Dynamic/Imported Fields Section */}
+      {enquiry.dynamicFields && Object.keys(enquiry.dynamicFields).length > 0 && (
+        <Paper sx={{ p: 3, backgroundColor: '#f0f4f8' }}>
+          <Typography variant="h6" gutterBottom display="flex" alignItems="center">
+            <AssignmentIcon sx={{ mr: 1 }} />
+            📊 Additional Imported Fields
+          </Typography>
+          <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 2 }}>
+            These fields were imported from the Excel file and stored as custom data
+          </Typography>
+          <Divider sx={{ mb: 2 }} />
+          <Grid container spacing={3}>
+            {Object.entries(enquiry.dynamicFields).map(([fieldName, fieldValue]) => (
+              <Grid item xs={12} md={6} key={fieldName}>
+                <Paper sx={{ p: 2, backgroundColor: 'white' }}>
+                  <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 600, mb: 0.5 }}>
+                    {/* Convert field name from snake_case to Title Case */}
+                    {fieldName
+                      .split('_')
+                      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                      .join(' ')}
+                  </Typography>
+                  <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>
+                    {fieldValue !== null && fieldValue !== undefined
+                      ? String(fieldValue)
+                      : '—'}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Paper>
+      )}
     </Box>
   );
 };

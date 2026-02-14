@@ -150,8 +150,10 @@ const enquirySchema = new mongoose.Schema(
 
 // Auto-generate enquiry number before saving
 enquirySchema.pre('save', async function (next) {
-  // Only auto-generate if this is a new document AND enquiryNumber is not already set
-  if (this.isNew && !this.enquiryNumber) {
+  // Only auto-generate if this is a new document AND enquiryNumber is NOT set or is empty
+  const hasEnquiryNumber = this.enquiryNumber && String(this.enquiryNumber).trim() !== '';
+  
+  if (this.isNew && !hasEnquiryNumber) {
     const date = new Date();
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -170,6 +172,9 @@ enquirySchema.pre('save', async function (next) {
     }
 
     this.enquiryNumber = `ENQ-${year}${month}-${String(sequence).padStart(4, '0')}`;
+  } else if (this.isNew && hasEnquiryNumber) {
+    // ✅ Enquiry number was provided (from Excel import) - use it as-is
+    // Don't auto-generate
   }
   next();
 });

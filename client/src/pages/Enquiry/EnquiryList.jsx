@@ -43,6 +43,7 @@ const EnquiryList = () => {
   const { user } = useAuthStore();
   const [enquiries, setEnquiries] = useState([]);
   const [customFields, setCustomFields] = useState([]);
+  const [systemFields, setSystemFields] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -70,6 +71,17 @@ const EnquiryList = () => {
   useEffect(() => {
     fetchEnquiries();
     fetchCustomFields();
+    fetchSystemFields();
+  }, []);
+
+  useEffect(() => {
+    const handleCustomFieldsUpdated = () => {
+      fetchCustomFields();
+      fetchSystemFields();
+    };
+
+    window.addEventListener('custom-fields-updated', handleCustomFieldsUpdated);
+    return () => window.removeEventListener('custom-fields-updated', handleCustomFieldsUpdated);
   }, []);
 
   const fetchCustomFields = async () => {
@@ -78,6 +90,15 @@ const EnquiryList = () => {
       setCustomFields(response.data.data || []);
     } catch (err) {
       console.error('Failed to fetch custom fields:', err);
+    }
+  };
+
+  const fetchSystemFields = async () => {
+    try {
+      const response = await axios.get('/system-fields');
+      setSystemFields(response.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch system fields:', err);
     }
   };
 
@@ -251,20 +272,36 @@ const EnquiryList = () => {
     }
   };
 
+  const systemFieldMap = systemFields.reduce((acc, field) => {
+    acc[field.name] = field;
+    return acc;
+  }, {});
+
+  const isSystemActive = (name) => systemFieldMap[name]?.isActive !== false;
+  const getSystemLabel = (name, fallback) => systemFieldMap[name]?.label || fallback;
+
   const columns = [
-    {
+    isSystemActive('enquiryNumber') && {
       field: 'enquiryNumber',
-      headerName: 'Enquiry #',
+      headerName: getSystemLabel('enquiryNumber', 'Enquiry #'),
       width: 150,
       renderCell: (params) => (
         <strong style={{ color: '#1976d2' }}>{params.value}</strong>
       ),
     },
-    { field: 'customerName', headerName: 'Customer', width: 200 },
-    { field: 'poNumber', headerName: 'PO Number', width: 130 },
-    {
+    isSystemActive('customerName') && {
+      field: 'customerName',
+      headerName: getSystemLabel('customerName', 'Customer'),
+      width: 200,
+    },
+    isSystemActive('poNumber') && {
+      field: 'poNumber',
+      headerName: getSystemLabel('poNumber', 'PO Number'),
+      width: 130,
+    },
+    isSystemActive('dateReceived') && {
       field: 'dateReceived',
-      headerName: 'Date Received',
+      headerName: getSystemLabel('dateReceived', 'Date Received'),
       width: 130,
       valueGetter: (params) => {
         const date = params.row?.dateReceived;
@@ -276,9 +313,9 @@ const EnquiryList = () => {
         }
       },
     },
-    {
+    isSystemActive('dateSubmitted') && {
       field: 'dateSubmitted',
-      headerName: 'Date Submitted',
+      headerName: getSystemLabel('dateSubmitted', 'Date Submitted'),
       width: 140,
       valueGetter: (params) => {
         const date = params.row?.dateSubmitted;
@@ -290,9 +327,9 @@ const EnquiryList = () => {
         }
       },
     },
-    {
+    isSystemActive('marketType') && {
       field: 'marketType',
-      headerName: 'Market',
+      headerName: getSystemLabel('marketType', 'Market'),
       width: 120,
       renderCell: (params) => (
         <Chip
@@ -302,11 +339,19 @@ const EnquiryList = () => {
         />
       ),
     },
-    { field: 'productType', headerName: 'Product', width: 120 },
-    { field: 'manufacturingType', headerName: 'Manufacturing', width: 140 },
-    {
+    isSystemActive('productType') && {
+      field: 'productType',
+      headerName: getSystemLabel('productType', 'Product'),
+      width: 120,
+    },
+    isSystemActive('manufacturingType') && {
+      field: 'manufacturingType',
+      headerName: getSystemLabel('manufacturingType', 'Manufacturing'),
+      width: 140,
+    },
+    isSystemActive('drawingStatus') && {
       field: 'drawingStatus',
-      headerName: 'Drawing',
+      headerName: getSystemLabel('drawingStatus', 'Drawing'),
       width: 120,
       renderCell: (params) => (
         <Chip
@@ -317,9 +362,9 @@ const EnquiryList = () => {
         />
       ),
     },
-    {
+    isSystemActive('costingStatus') && {
       field: 'costingStatus',
-      headerName: 'Costing',
+      headerName: getSystemLabel('costingStatus', 'Costing'),
       width: 120,
       renderCell: (params) => (
         <Chip
@@ -330,9 +375,9 @@ const EnquiryList = () => {
         />
       ),
     },
-    {
+    isSystemActive('rndStatus') && {
       field: 'rndStatus',
-      headerName: 'R&D',
+      headerName: getSystemLabel('rndStatus', 'R&D'),
       width: 120,
       renderCell: (params) => (
         <Chip
@@ -343,9 +388,9 @@ const EnquiryList = () => {
         />
       ),
     },
-    {
+    isSystemActive('salesStatus') && {
       field: 'salesStatus',
-      headerName: 'Sales',
+      headerName: getSystemLabel('salesStatus', 'Sales'),
       width: 120,
       renderCell: (params) => (
         <Chip
@@ -356,9 +401,9 @@ const EnquiryList = () => {
         />
       ),
     },
-    {
+    isSystemActive('activity') && {
       field: 'activity',
-      headerName: 'Activity',
+      headerName: getSystemLabel('activity', 'Activity'),
       width: 130,
       renderCell: (params) => (
         <Chip
@@ -368,9 +413,9 @@ const EnquiryList = () => {
         />
       ),
     },
-    {
+    isSystemActive('status') && {
       field: 'status',
-      headerName: 'Status',
+      headerName: getSystemLabel('status', 'Status'),
       width: 100,
       renderCell: (params) => (
         <Chip
@@ -381,30 +426,30 @@ const EnquiryList = () => {
         />
       ),
     },
-    {
+    isSystemActive('salesRepresentative') && {
       field: 'salesRepresentative',
-      headerName: 'Sales Rep',
+      headerName: getSystemLabel('salesRepresentative', 'Sales Rep'),
       width: 150,
       valueGetter: (params) => params.row?.salesRepresentative?.name || params.row?.salesRepName || 'N/A',
     },
-    {
+    isSystemActive('rndHandler') && {
       field: 'rndHandler',
-      headerName: 'R&D Handler',
+      headerName: getSystemLabel('rndHandler', 'R&D Handler'),
       width: 150,
       valueGetter: (params) => params.row?.rndHandler?.name || params.row?.rndHandlerName || 'N/A',
     },
-    {
+    isSystemActive('daysRequiredForFulfillment') && {
       field: 'daysRequiredForFulfillment',
-      headerName: 'Days Required',
+      headerName: getSystemLabel('daysRequiredForFulfillment', 'Days Required'),
       width: 130,
       valueGetter: (params) => {
         const days = params.row?.daysRequiredForFulfillment;
         return days !== undefined && days !== null ? `${days} days` : 'N/A';
       },
     },
-    {
+    isSystemActive('remarks') && {
       field: 'remarks',
-      headerName: 'Remarks',
+      headerName: getSystemLabel('remarks', 'Remarks'),
       width: 250,
       valueGetter: (params) => params.row?.remarks || 'No remarks',
     },
@@ -456,7 +501,7 @@ const EnquiryList = () => {
         </Box>
       ),
     },
-  ];
+  ].filter(Boolean);
 
   function CustomToolbar() {
     return (

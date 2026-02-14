@@ -73,6 +73,19 @@ export const exportToExcel = async (req, res, next) => {
     // Fetch all active custom fields
     const customFields = await CustomField.find({ isActive: true }).sort({ createdAt: 1 });
 
+    // ✅ IMPORTANT: Also collect all unique dynamic field names from enquiries
+    // This captures orphaned fields that were imported but don't have CustomField entries
+    const allDynamicFieldNames = new Set();
+    customFields.forEach(field => allDynamicFieldNames.add(field.name));
+    
+    enquiries.forEach(enquiry => {
+      if (enquiry.dynamicFields && typeof enquiry.dynamicFields === 'object') {
+        Object.keys(enquiry.dynamicFields).forEach(fieldName => {
+          allDynamicFieldNames.add(fieldName);
+        });
+      }
+    });
+
     // Create workbook and worksheet
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Enquiries Report');
@@ -95,12 +108,23 @@ export const exportToExcel = async (req, res, next) => {
       { header: 'Remarks', key: 'remarks', width: 40 },
     ];
 
-    // Add dynamic field columns
-    const dynamicColumns = customFields.map(field => ({
-      header: field.label,
-      key: `dynamic_${field.name}`,
-      width: 20
-    }));
+    // Add dynamic field columns (both defined CustomFields and orphaned fields)
+    const dynamicColumns = Array.from(allDynamicFieldNames)
+      .sort()
+      .map(fieldName => {
+        // Try to find CustomField for label, fallback to field name
+        const customField = customFields.find(f => f.name === fieldName);
+        const label = customField?.label || fieldName
+          .split('_')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+        
+        return {
+          header: label,
+          key: `dynamic_${fieldName}`,
+          width: 20
+        };
+      });
 
     // Combine all columns
     worksheet.columns = [...staticColumns, ...dynamicColumns];
@@ -133,10 +157,10 @@ export const exportToExcel = async (req, res, next) => {
         remarks: enquiry.remarks || '',
       };
 
-      // Add dynamic field values
-      customFields.forEach(field => {
-        const value = enquiry.dynamicFields?.get?.(field.name) || enquiry.dynamicFields?.[field.name] || '';
-        rowData[`dynamic_${field.name}`] = value;
+      // Add dynamic field values (both defined and orphaned fields)
+      Array.from(allDynamicFieldNames).forEach(fieldName => {
+        const value = enquiry.dynamicFields?.get?.(fieldName) || enquiry.dynamicFields?.[fieldName] || '';
+        rowData[`dynamic_${fieldName}`] = value;
       });
 
       worksheet.addRow(rowData);
@@ -195,6 +219,16 @@ export const exportToCSV = async (req, res, next) => {
       .populate('rndHandler', 'name')
       .sort({ enquiryDate: -1 });
 
+    // ✅ Collect all unique dynamic field names from enquiries (for CSV export)
+    const allDynamicFieldNames = new Set();
+    enquiries.forEach(enquiry => {
+      if (enquiry.dynamicFields && typeof enquiry.dynamicFields === 'object') {
+        Object.keys(enquiry.dynamicFields).forEach(fieldName => {
+          allDynamicFieldNames.add(fieldName);
+        });
+      }
+    });
+
     // Create CSV content
     const headers = [
       'Enquiry Number',
@@ -211,7 +245,9 @@ export const exportToCSV = async (req, res, next) => {
       'Closure Date',
       'Fulfillment Time',
       'Remarks',
-      'Delay Remarks'
+      'Delay Remarks',
+      // ✅ Add dynamic field headers
+      ...Array.from(allDynamicFieldNames).sort()
     ];
 
     let csvContent = headers.join(',') + '\n';
@@ -233,6 +269,16 @@ export const exportToCSV = async (req, res, next) => {
         enquiry.fulfillmentTime || '',
         `"${enquiry.remarks || ''}"`,
         `"${enquiry.delayRemarks || ''}"`,
+        // ✅ Add dynamic field values
+        ...Array.from(allDynamicFieldNames)
+          .sort()
+          .map(fieldName => {
+            const value = enquiry.dynamicFields?.[fieldName] || '';
+            // Quote if it contains comma or newline
+            return typeof value === 'string' && (value.includes(',') || value.includes('\n'))
+              ? `"${value.replace(/"/g, '""')}"`
+              : value;
+          })
       ];
       csvContent += row.join(',') + '\n';
     });

@@ -39,44 +39,55 @@ export const findValueInRow = (row, ...possibleNames) => {
 };
 
 // Column mapping configuration based on the actual Excel structure
+// Updated to match the exact 16 columns from Sales Enquiry Tracker Excel
 export const COLUMN_MAPPINGS = {
-  // Serial Number / ID
-  srNo: ['SR. No.', 'SR NO', 'S.No', 'Serial No', 'Sr No', 'SR.No.', 'Sr.No.', 'S. No.'],
+  // ✅ 1. Serial Number / ID
+  srNo: ['SR. No.', 'SR NO', 'SR.No.', 'S.No', 'Serial No', 'Sr No', 'Sr.No.', 'S. No.'],
   
-  // Enquiry Number (Primary Key)
-  enquiryNumber: ['Enq No.', 'ENQ NO', 'Enquiry No', 'Enquiry Number', 'EnqNo', 'Enq.No.', 'Enq. No.', 'ENQ. NO.', 'Enquiry No.'],
+  // ✅ 2. Enquiry Number (Primary Key) - Column header: "Enq No."
+  enquiryNumber: ['Enq No.', 'Enq No', 'ENQ NO', 'Enquiry No', 'Enquiry Number', 'EnqNo', 'Enq.No.', 'Enq. No.', 'ENQ. NO.', 'Enquiry No.', 'Enq No.'],
   
-  // Market Segment
-  marketType: ['EXPORT / DOMESTIC', 'Market', 'Market Type', 'MARKET TYPE', 'Export/Domestic', 'Market Segment', 'EXPORT/DOMESTIC', 'Export / Domestic'],
+  // ✅ 3. Market Segment - Column header: "EXPORT / DOMESTIC"
+  marketType: ['EXPORT / DOMESTIC', 'EXPORT/DOMESTIC', 'Export / Domestic', 'Export/Domestic', 'Market', 'Market Type', 'MARKET TYPE', 'Export Domestic', 'Market Segment'],
   
-  // PO Number (mostly empty in dataset)
-  poNumber: ['PO No.', 'PO NO', 'PO Number', 'Purchase Order', 'PONo', 'PO. No.', 'P.O. No.'],
+  // ✅ 4. PO Number - Column header: "PO No." (mostly "-" in dataset)
+  poNumber: ['PO No.', 'PO No', 'PONo', 'PO NO', 'PO Number', 'Purchase Order', 'PO. No.', 'P.O. No.', 'PO. Number'],
   
-  // Dates
-  dateReceived: ['DATE RECEIVED', 'Date Received', 'Received Date', 'DateReceived', 'DATE. RECEIVED', 'Date. Received'],
-  dateSubmitted: ['DATE SUBMITTED', 'Date Submitted', 'Submitted Date', 'DateSubmitted', 'Quotation Date', 'DATE. SUBMITTED', 'Date. Submitted'],
+  // ✅ 5. DATE RECEIVED (Enquiry Date) - Column header: "DATE RECEIVED"
+  dateReceived: ['DATE RECEIVED', 'Date Received', 'Received Date', 'DateReceived', 'DATE RECEIVED', 'Date. Received', 'DATE. RECEIVED', 'Enquiry Date', 'Date'],
   
-  // Requirements (Boolean Y/N fields)
-  drawingRequired: ['DRAWING', 'Drawing', 'Drawing Required', 'DrawingRequired', 'DRAWING.', 'Drawing.'],
-  costingCompleted: ['COSTING', 'Costing', 'Costing Completed', 'CostingCompleted', 'COSTING.', 'Costing.'],
+  // ✅ 6. DATE SUBMITTED (Quotation/Submission Date) - Column header: "DATE SUBMITTED"
+  dateSubmitted: ['DATE SUBMITTED', 'Date Submitted', 'Submitted Date', 'DateSubmitted', 'Quotation Date', 'Quote Date', 'DATE SUBMITTED', 'Date. Submitted', 'DATE. SUBMITTED', 'Submission Date'],
   
-  // Team Assignment
-  rndHandler: ['R&D', 'RND', 'R&D Handler', 'RND Handler', 'R&D Person', 'Research', 'R & D', 'R&D.', 'R & D.'],
-  salesRep: ['SALES', 'Sales', 'Sales Representative', 'Sales Rep', 'SALES REP', 'Representative', 'SALES.', 'Sales.'],
+  // ✅ 7. DRAWING Status - Column header: "DRAWING" (Y/N boolean)
+  drawingRequired: ['DRAWING', 'Drawing', 'Drawing Status', 'Drawing Required', 'DrawingRequired', 'DRAWING', 'Drawing.'],
   
-  // Status Fields
-  status: ['OPEN / CLOSED', 'STATUS', 'Enquiry Status', 'Status', 'Open/Closed', 'OPEN/CLOSED', 'Open / Closed', 'OPEN. / CLOSED.'],
-  activity: ['ACTIVITY', 'Activity', 'Current Activity', 'ActivityStatus', 'ACTIVITY.', 'Activity.'],
+  // ✅ 8. COSTING Status - Column header: "COSTING" (Y/N boolean)
+  costingCompleted: ['COSTING', 'Costing', 'Costing Status', 'Costing Completed', 'CostingCompleted', 'COSTING', 'Costing.'],
   
-  // Scope and Product
-  supplyScope: ['SCOPE OF SUPPLY', 'Supply Scope', 'Scope', 'SUPPLY SCOPE', 'ScopeOfSupply', 'Scope Of Supply', 'SCOPE. OF SUPPLY'],
-  productType: ['PRODUCT TYPE', 'Product Type', 'ProductType', 'Product', 'PRODUCT. TYPE', 'Product. Type'],
+  // ✅ 9. R&D Representative - Column header: "R&D"
+  rndHandler: ['R&D', 'R & D', 'RND', 'R&D Handler', 'RND Handler', 'R&D Person', 'Research', 'R&D.', 'R & D.', 'RnD', 'RND Handler'],
   
-  // Performance
-  daysRequired: ['DAYS TO COMPLETE', 'Days To Complete', 'DAYS TO COMPLETE ENQUIRY', 'Days Required', 'Fulfillment Days', 'DaysToComplete', 'Days to Complete Enquiry', 'DAYS. TO COMPLETE', 'Days requiered for fullfillment'],
+  // ✅ 10. SALES Representative - Column header: "SALES"
+  salesRep: ['SALES', 'Sales', 'Sales Representative', 'Sales Rep', 'SALES REP', 'Representative', 'SALES.', 'Sales.', 'SALES REPRESENTATIVE', 'Sales Person'],
   
-  // Remarks
-  remarks: ['REMARK', 'Remarks', 'REMARKS', 'Comments', 'Notes', 'Closure Reason', 'REMARK.', 'Remarks.'],
+  // ✅ 11. Status - Column header: "OPEN / CLOSED"
+  status: ['OPEN / CLOSED', 'OPEN/CLOSED', 'Open / Closed', 'Open/Closed', 'STATUS', 'Enquiry Status', 'Status', 'OPEN CLOSED'],
+  
+  // ✅ 12. ACTIVITY - Column header: "ACTIVITY"
+  activity: ['ACTIVITY', 'Activity', 'Current Activity', 'ActivityStatus', 'ACTIVITY', 'Activity.', 'Activity Type'],
+  
+  // ✅ 13. SCOPE OF SUPPLY - Column header: "SCOPE OF SUPPLY"
+  supplyScope: ['SCOPE OF SUPPLY', 'Scope Of Supply', 'Supply Scope', 'Scope', 'SUPPLY SCOPE', 'ScopeOfSupply', 'SCOPE. OF SUPPLY', 'Scope of Supply', 'Supply'],
+  
+  // ✅ 14. PRODUCT TYPE - Column header: "PRODUCT TYPE"
+  productType: ['PRODUCT TYPE', 'Product Type', 'ProductType', 'Product', 'PRODUCT. TYPE', 'Product. Type', 'PRODUCT TYPE', 'Product Category'],
+  
+  // ✅ 15. DAYS TO COMPLETE ENQUIRY - Column header: "DAYS TO COMPLETE ENQUIRY"
+  daysRequired: ['DAYS TO COMPLETE ENQUIRY', 'Days To Complete Enquiry', 'DAYS TO COMPLETE', 'Days To Complete', 'Days Required', 'Fulfillment Days', 'DaysToComplete', 'Days to Complete Enquiry', 'Days', 'DAYS. TO COMPLETE', 'Days required for fulfillment'],
+  
+  // ✅ 16. REMARK - Column header: "REMARK"
+  remarks: ['REMARK', 'Remarks', 'REMARKS', 'Comments', 'Notes', 'Remarks', 'Remark', 'REMARK', 'Closure Reason', 'Inquiry Notes'],
 };
 
 // Standardization functions
@@ -116,10 +127,20 @@ export const standardizeStatus = (value, activity) => {
 export const standardizeSupplyScope = (value) => {
   if (!value || value === '-') return null;
   const str = String(value).toUpperCase().trim();
-  if (str === 'IN-HOUSE' || str === 'INHOUSE') return 'Inhouse';
-  if (str === 'BO' || str === 'BROUGHTOUT' || str === 'BROUGHT OUT') return 'Broughtout';
+  
+  // Debug log
+  console.log(`Standardizing supply scope: "${value}" → "${str}"`);
+  
+  if (str === 'IN-HOUSE' || str === 'INHOUSE' || str === 'IN HOUSE') return 'Inhouse';
+  if (str === 'BO' || str === 'BROUGHTOUT' || str === 'BROUGHT OUT' || str === 'BROUGHT-OUT') return 'Broughtout';
   if (str.includes('IN-HOUSE') && str.includes('BO')) return 'Both';
+  if (str.includes('IN HOUSE') && str.includes('BO')) return 'Both';
+  if (str.includes('INHOUSE') && str.includes('BO')) return 'Both';
   if (str.includes('&')) return 'Both';
+  if (str.includes('AND')) return 'Both';
+  
+  // If we don't recognize it, log it
+  console.log(`⚠️ Unknown supply scope value: "${value}" (original), defaulting to null`);
   return null;
 };
 

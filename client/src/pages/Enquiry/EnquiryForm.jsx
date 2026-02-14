@@ -33,6 +33,7 @@ const EnquiryForm = () => {
   const [salesUsers, setSalesUsers] = useState([]);
   const [rndUsers, setRndUsers] = useState([]);
   const [customFields, setCustomFields] = useState([]);
+  const [systemFields, setSystemFields] = useState([]);
 
   // Helper functions to determine field visibility based on role
   const canEditSalesFields = () => {
@@ -46,6 +47,14 @@ const EnquiryForm = () => {
   const isManagement = () => {
     return userRole === 'management';
   };
+
+  const systemFieldMap = systemFields.reduce((acc, field) => {
+    acc[field.name] = field;
+    return acc;
+  }, {});
+
+  const isSystemActive = (name) => systemFieldMap[name]?.isActive !== false;
+  const getSystemLabel = (name, fallback) => systemFieldMap[name]?.label || fallback;
 
   const [formData, setFormData] = useState({
     customerName: '',
@@ -77,11 +86,21 @@ const EnquiryForm = () => {
   useEffect(() => {
     fetchUsers();
     fetchCustomFields();
+    fetchSystemFields();
     if (isEditMode) {
       fetchEnquiry();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  useEffect(() => {
+    const handleCustomFieldsUpdated = () => {
+      fetchCustomFields();
+    };
+
+    window.addEventListener('custom-fields-updated', handleCustomFieldsUpdated);
+    return () => window.removeEventListener('custom-fields-updated', handleCustomFieldsUpdated);
+  }, []);
 
   const fetchUsers = async () => {
     try {
@@ -102,6 +121,25 @@ const EnquiryForm = () => {
       console.error('Failed to fetch custom fields:', err);
     }
   };
+
+  const fetchSystemFields = async () => {
+    try {
+      const response = await axios.get('/system-fields');
+      setSystemFields(response.data.data || []);
+    } catch (err) {
+      console.error('Failed to fetch system fields:', err);
+    }
+  };
+
+  useEffect(() => {
+    const handleCustomFieldsUpdated = () => {
+      fetchCustomFields();
+      fetchSystemFields();
+    };
+
+    window.addEventListener('custom-fields-updated', handleCustomFieldsUpdated);
+    return () => window.removeEventListener('custom-fields-updated', handleCustomFieldsUpdated);
+  }, []);
 
   const fetchEnquiry = async () => {
     try {
@@ -230,10 +268,45 @@ const EnquiryForm = () => {
             value={value}
             onChange={(e) => handleDynamicFieldChange(field.name, e.target.value)}
             required={field.isRequired}
+            multiline={field.label && field.label.toLowerCase().includes('remark') ? true : false}
+            rows={field.label && field.label.toLowerCase().includes('remark') ? 2 : 1}
             helperText={field.description}
           />
         );
+      }
+  };
+
+  // ✅ IMPORTANT: Also render any orphaned dynamic fields that exist in data but aren't in customFields
+  const getOrphanedDynamicFields = () => {
+    if (!formData.dynamicFields) return [];
+    
+    const customFieldNames = customFields.map(f => f.name);
+    const orphanedFields = {};
+    
+    for (const [fieldName, value] of Object.entries(formData.dynamicFields)) {
+      if (!customFieldNames.includes(fieldName)) {
+        orphanedFields[fieldName] = value;
+      }
     }
+    
+    return Object.entries(orphanedFields);
+  };
+
+  const renderOrphanedDynamicField = ([fieldName, value]) => {
+    return (
+      <Grid item xs={12} md={6} key={fieldName}>
+        <TextField
+          fullWidth
+          label={fieldName
+            .split('_')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ')}
+          value={value ?? ''}
+          onChange={(e) => handleDynamicFieldChange(fieldName, e.target.value)}
+          helperText="This field was imported from Excel"
+        />
+      </Grid>
+    );
   };
 
   const handleSubmit = async (e) => {
@@ -297,11 +370,11 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('customerName') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Customer Name"
+                  label={getSystemLabel('customerName', 'Customer Name')}
                   name="customerName"
                   value={formData.customerName}
                   onChange={handleChange}
@@ -310,12 +383,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('enquiryDate') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Enquiry Date"
+                  label={getSystemLabel('enquiryDate', 'Enquiry Date')}
                   name="enquiryDate"
                   value={formData.enquiryDate}
                   onChange={handleChange}
@@ -324,13 +397,13 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('marketType') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   required
                   fullWidth
                   select
-                  label="Market Type"
+                  label={getSystemLabel('marketType', 'Market Type')}
                   name="marketType"
                   value={formData.marketType}
                   onChange={handleChange}
@@ -341,13 +414,13 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditRndFields() && (
+            {canEditRndFields() && isSystemActive('productType') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   required
                   fullWidth
                   select
-                  label="Product Type"
+                  label={getSystemLabel('productType', 'Product Type')}
                   name="productType"
                   value={formData.productType}
                   onChange={handleChange}
@@ -360,11 +433,11 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('supplyScope') && (
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Supply Scope"
+                  label={getSystemLabel('supplyScope', 'Supply Scope')}
                   name="supplyScope"
                   value={formData.supplyScope}
                   onChange={handleChange}
@@ -375,11 +448,11 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('poNumber') && (
               <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
-                  label="PO Number"
+                  label={getSystemLabel('poNumber', 'PO Number')}
                   name="poNumber"
                   value={formData.poNumber}
                   onChange={handleChange}
@@ -388,12 +461,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('quantity') && (
               <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   type="number"
-                  label="Quantity"
+                  label={getSystemLabel('quantity', 'Quantity')}
                   name="quantity"
                   value={formData.quantity}
                   onChange={handleChange}
@@ -402,12 +475,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('estimatedValue') && (
               <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
                   type="number"
-                  label="Estimated Value"
+                  label={getSystemLabel('estimatedValue', 'Estimated Value')}
                   name="estimatedValue"
                   value={formData.estimatedValue}
                   onChange={handleChange}
@@ -416,12 +489,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('dateReceived') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Date Received"
+                  label={getSystemLabel('dateReceived', 'Date Received')}
                   name="dateReceived"
                   value={formData.dateReceived}
                   onChange={handleChange}
@@ -431,12 +504,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('dateSubmitted') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Date Submitted"
+                  label={getSystemLabel('dateSubmitted', 'Date Submitted')}
                   name="dateSubmitted"
                   value={formData.dateSubmitted}
                   onChange={handleChange}
@@ -446,12 +519,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditRndFields() && (
+            {canEditRndFields() && isSystemActive('manufacturingType') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   select
-                  label="Manufacturing Type"
+                  label={getSystemLabel('manufacturingType', 'Manufacturing Type')}
                   name="manufacturingType"
                   value={formData.manufacturingType}
                   onChange={handleChange}
@@ -464,12 +537,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditRndFields() && (
+            {canEditRndFields() && isSystemActive('daysRequiredForFulfillment') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   type="number"
-                  label="Days Required for Fulfillment"
+                  label={getSystemLabel('daysRequiredForFulfillment', 'Days Required for Fulfillment')}
                   name="daysRequiredForFulfillment"
                   value={formData.daysRequiredForFulfillment}
                   onChange={handleChange}
@@ -486,12 +559,12 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            {canEditRndFields() && (
+            {canEditRndFields() && isSystemActive('drawingStatus') && (
               <Grid item xs={12} md={6} lg={3}>
                 <TextField
                   fullWidth
                   select
-                  label="Drawing Status"
+                  label={getSystemLabel('drawingStatus', 'Drawing Status')}
                   name="drawingStatus"
                   value={formData.drawingStatus}
                   onChange={handleChange}
@@ -504,12 +577,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditRndFields() && (
+            {canEditRndFields() && isSystemActive('costingStatus') && (
               <Grid item xs={12} md={6} lg={3}>
                 <TextField
                   fullWidth
                   select
-                  label="Costing Status"
+                  label={getSystemLabel('costingStatus', 'Costing Status')}
                   name="costingStatus"
                   value={formData.costingStatus}
                   onChange={handleChange}
@@ -522,12 +595,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditRndFields() && (
+            {canEditRndFields() && isSystemActive('rndStatus') && (
               <Grid item xs={12} md={6} lg={3}>
                 <TextField
                   fullWidth
                   select
-                  label="R&D Status"
+                  label={getSystemLabel('rndStatus', 'R&D Status')}
                   name="rndStatus"
                   value={formData.rndStatus}
                   onChange={handleChange}
@@ -540,12 +613,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('salesStatus') && (
               <Grid item xs={12} md={6} lg={3}>
                 <TextField
                   fullWidth
                   select
-                  label="Sales Status"
+                  label={getSystemLabel('salesStatus', 'Sales Status')}
                   name="salesStatus"
                   value={formData.salesStatus}
                   onChange={handleChange}
@@ -566,13 +639,13 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('salesRepresentative') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   required
                   fullWidth
                   select
-                  label="Sales Representative"
+                  label={getSystemLabel('salesRepresentative', 'Sales Representative')}
                   name="salesRepresentative"
                   value={formData.salesRepresentative}
                   onChange={handleChange}
@@ -587,13 +660,13 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditRndFields() && (
+            {canEditRndFields() && isSystemActive('rndHandler') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   required
                   fullWidth
                   select
-                  label="R&D Handler"
+                  label={getSystemLabel('rndHandler', 'R&D Handler')}
                   name="rndHandler"
                   value={formData.rndHandler}
                   onChange={handleChange}
@@ -616,13 +689,13 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('activity') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   required
                   fullWidth
                   select
-                  label="Activity"
+                  label={getSystemLabel('activity', 'Activity')}
                   name="activity"
                   value={formData.activity}
                   onChange={handleChange}
@@ -635,13 +708,13 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('status') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   required
                   fullWidth
                   select
-                  label="Status"
+                  label={getSystemLabel('status', 'Status')}
                   name="status"
                   value={formData.status}
                   onChange={handleChange}
@@ -653,12 +726,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('quotationDate') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Quotation Date"
+                  label={getSystemLabel('quotationDate', 'Quotation Date')}
                   name="quotationDate"
                   value={formData.quotationDate}
                   onChange={handleChange}
@@ -668,12 +741,12 @@ const EnquiryForm = () => {
               </Grid>
             )}
 
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('closureDate') && (
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
                   type="date"
-                  label="Closure Date"
+                  label={getSystemLabel('closureDate', 'Closure Date')}
                   name="closureDate"
                   value={formData.closureDate}
                   onChange={handleChange}
@@ -692,11 +765,11 @@ const EnquiryForm = () => {
           <Divider sx={{ mb: 2 }} />
 
           <Grid container spacing={3}>
-            {canEditSalesFields() && (
+            {canEditSalesFields() && isSystemActive('remarks') && (
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Remarks"
+                  label={getSystemLabel('remarks', 'Remarks')}
                   name="remarks"
                   value={formData.remarks}
                   onChange={handleChange}
@@ -709,16 +782,28 @@ const EnquiryForm = () => {
           </Grid>
 
           {/* Custom Dynamic Fields */}
-          {customFields.length > 0 && (
+          {(customFields.length > 0 || Object.keys(formData.dynamicFields || {}).length > 0) && (
             <>
               <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-                Additional Custom Fields
+                📊 Additional Imported Fields
               </Typography>
               <Divider sx={{ mb: 2 }} />
+              <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 2 }}>
+                {customFields.length > 0 && `Configured custom fields (${customFields.length})`}
+                {customFields.length > 0 && Object.keys(getOrphanedDynamicFields() || {}).length > 0 && ' + '}
+                {Object.keys(getOrphanedDynamicFields() || {}).length > 0 && `Imported fields (${Object.keys(getOrphanedDynamicFields() || {}).length})`}
+              </Typography>
               <Grid container spacing={3}>
                 {customFields.map((field) => (
                   <Grid item xs={12} md={6} key={field._id}>
                     {renderDynamicField(field)}
+                  </Grid>
+                ))}
+                
+                {/* Render orphaned dynamic fields */}
+                {getOrphanedDynamicFields().map((orphanedField) => (
+                  <Grid item xs={12} md={6} key={orphanedField[0]}>
+                    {renderOrphanedDynamicField(orphanedField)}
                   </Grid>
                 ))}
               </Grid>
