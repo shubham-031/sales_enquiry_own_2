@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Grid,
@@ -11,12 +11,23 @@ import {
   IconButton,
   Tooltip,
   Stack,
-  TextField,
   Button,
   Select,
   MenuItem,
   FormControl,
   InputLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Divider,
+  Chip,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
 } from '@mui/material';
 import {
   Assignment,
@@ -32,6 +43,9 @@ import {
   BarChart as BarChartIcon,
   FilterList,
   Clear,
+  Close,
+  TrendingUp,
+  CalendarMonth,
 } from '@mui/icons-material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -69,7 +83,7 @@ ChartJS.register(
 );
 
 const StatCard = ({ title, value, icon, color, bgColor }) => (
-  <Card 
+  <Card   
     sx={{ 
       height: '100%',
       background: 'white',
@@ -135,6 +149,7 @@ const StatCard = ({ title, value, icon, color, bgColor }) => (
 );
 
 const Dashboard = () => {
+  // ============= EXISTING STATE =============
   const [stats, setStats] = useState(null);
   const [teamPerformance, setTeamPerformance] = useState(null);
   const [marketAnalysis, setMarketAnalysis] = useState(null);
@@ -147,15 +162,34 @@ const Dashboard = () => {
   const [endDate, setEndDate] = useState(null);
   const [role, setRole] = useState('');
 
-  useEffect(() => {
-    fetchAllData();
-  }, []);
+  // Drilldown Modal State
+  const [drilldownOpen, setDrilldownOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [memberMonthlyData, setMemberMonthlyData] = useState(null);
+  const [drilldownLoading, setDrilldownLoading] = useState(false);
 
-  const fetchAllData = async () => {
+  // ============= NEW: REAL-TIME STATE =============
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshInterval, setRefreshInterval] = useState(30);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const intervalRef = useRef(null);
+  const lastFetchRef = useRef(Date.now());
+
+  // ============= ENHANCED FETCH FUNCTION =============
+  const fetchAllData = useCallback(async (isAutoRefresh = false) => {
+    const now = Date.now();
+    if (now - lastFetchRef.current < 5000 && isAutoRefresh) {
+      console.log('⏸️ Skipping refresh - too soon');
+      return;
+    }
+    
     try {
-      setLoading(true);
+      if (!isAutoRefresh) {
+        setLoading(true);
+      }
+      setIsRefreshing(true);
       
-      // Prepare filter params
       const params = {};
       if (startDate) {
         params.startDate = dayjs(startDate).format('YYYY-MM-DD');
@@ -166,6 +200,8 @@ const Dashboard = () => {
       if (role) {
         params.role = role;
       }
+      
+      console.log('🔄 Fetching dashboard data...', isAutoRefresh ? '(Auto)' : '(Manual)');
       
       const [statsRes, teamRes, marketRes, trendRes, activityRes, productRes, fulfillmentRes] = await Promise.all([
         dashboardService.getStats(params),
@@ -184,12 +220,115 @@ const Dashboard = () => {
       setActivityDistribution(activityRes);
       setProductDistribution(productRes);
       setFulfillmentAnalysis(fulfillmentRes);
+      setLastUpdated(new Date());
+      lastFetchRef.current = now;
+      
+      console.log('✅ Dashboard updated at', new Date().toLocaleTimeString());
+      
+     
     } catch (error) {
       toast.error('Failed to load dashboard data');
-      console.error(error);
+      console.error('❌ Dashboard fetch error:', error);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
+  }, [startDate, endDate, role]);
+
+  // ============= AUTO-REFRESH LOGIC =============
+  useEffect(() => {
+    fetchAllData(false);
+  }, []);
+
+  useEffect(() => {
+    if (autoRefresh && refreshInterval > 0) {
+      console.log(`🔄 Auto-refresh enabled: every ${refreshInterval} seconds`);
+      
+      intervalRef.current = setInterval(() => {
+        console.log('⏰ Auto-refresh triggered');
+        fetchAllData(true);
+      }, refreshInterval * 1000);
+      
+      return () => {
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          console.log('⏹️ Auto-refresh stopped');
+        }
+      };
+    }
+  }, [autoRefresh, refreshInterval, fetchAllData]);
+
+  useEffect(() => {
+    if (startDate || endDate || role) {
+      console.log('🔍 Filters changed, refreshing...');
+      fetchAllData(false);
+    }
+  }, [startDate, endDate, role, fetchAllData]);
+
+  useEffect(() => {
+    const handleExcelUpload = () => {
+      console.log('📊 Excel uploaded, refreshing dashboard...');
+      toast.info('New data detected, refreshing dashboard...');
+      setTimeout(() => fetchAllData(false), 2000);
+    };
+
+    window.addEventListener('excelUploaded', handleExcelUpload);
+    return () => window.removeEventListener('excelUploaded', handleExcelUpload);
+  }, [fetchAllData]);
+
+  // ============= HELPER FUNCTIONS =============
+  const getTimeAgo = (date) => {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return date.toLocaleTimeString();
+  };
+
+  const handleForceRefresh = () => {
+    lastFetchRef.current = 0;
+    fetchAllData(false);
+  };
+
+  // ============= EXISTING FUNCTIONS (KEEP AS IS) =============
+  const fetchMemberMonthlyData = async (memberName) => {
+    try {
+      setDrilldownLoading(true);
+      
+      const params = {};
+      if (startDate) {
+        params.startDate = dayjs(startDate).format('YYYY-MM-DD');
+      }
+      if (endDate) {
+        params.endDate = dayjs(endDate).format('YYYY-MM-DD');
+      }
+
+      console.log('🔍 Fetching monthly data for:', memberName, 'with params:', params);
+
+      const data = await dashboardService.getMemberMonthlyPerformance(memberName, params);
+      
+      console.log('✅ Monthly data received:', data);
+      
+      setMemberMonthlyData(data);
+    } catch (error) {
+      console.error('❌ Error fetching member monthly data:', error);
+      toast.error('Failed to load member details');
+    } finally {
+      setDrilldownLoading(false);
+    }
+  };
+
+  const handleMemberClick = (memberName) => {
+    console.log('👤 Member clicked:', memberName);
+    setSelectedMember(memberName);
+    setDrilldownOpen(true);
+    fetchMemberMonthlyData(memberName);
+  };
+
+  const handleCloseDrilldown = () => {
+    setDrilldownOpen(false);
+    setSelectedMember(null);
+    setMemberMonthlyData(null);
   };
 
   const handleApplyFilter = () => {
@@ -202,13 +341,7 @@ const Dashboard = () => {
     setRole('');
   };
 
-  useEffect(() => {
-    if (startDate === null && endDate === null && role === '') {
-      fetchAllData();
-    }
-  }, [startDate, endDate, role]);
-
-  // Chart configurations
+  // ============= CHART OPTIONS (KEEP YOUR EXISTING CODE) =============
   const commonChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -309,11 +442,17 @@ const Dashboard = () => {
     }
   };
 
-  const horizontalBarOptions = {
-    ...commonChartOptions,
+  const salesTeamHorizontalBarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
     indexAxis: 'y',
+    interaction: {
+      mode: 'nearest',
+      intersect: true,
+    },
     scales: {
       x: {
+        stacked: false,
         beginAtZero: true,
         grid: { 
           color: 'rgba(0,0,0,0.04)',
@@ -326,6 +465,159 @@ const Dashboard = () => {
         border: { display: false }
       },
       y: {
+        stacked: false,
+        grid: { display: false },
+        ticks: { 
+          font: { size: 11, family: 'Inter' },
+          padding: 10,
+        },
+        border: { display: false }
+      }
+    },
+    elements: {
+      bar: {
+        borderRadius: 6,
+        borderSkipped: false,
+      }
+    },
+    barThickness: 18,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: { size: 12, weight: '600', family: 'Inter' },
+          boxWidth: 10,
+          boxHeight: 10,
+        }
+      },
+      tooltip: {
+        enabled: false,
+        external: function(context) {
+          let tooltipEl = document.getElementById('chartjs-tooltip-sales');
+          
+          if (!tooltipEl) {
+            tooltipEl = document.createElement('div');
+            tooltipEl.id = 'chartjs-tooltip-sales';
+            tooltipEl.style.background = 'rgba(0, 0, 0, 0.95)';
+            tooltipEl.style.borderRadius = '12px';
+            tooltipEl.style.color = 'white';
+            tooltipEl.style.opacity = '0';
+            tooltipEl.style.pointerEvents = 'none';
+            tooltipEl.style.position = 'absolute';
+            tooltipEl.style.transform = 'translate(-50%, -110%)';
+            tooltipEl.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+            tooltipEl.style.padding = '12px 16px';
+            tooltipEl.style.fontSize = '13px';
+            tooltipEl.style.fontFamily = 'Inter, sans-serif';
+            tooltipEl.style.zIndex = '9999';
+            tooltipEl.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
+            tooltipEl.style.minWidth = '200px';
+            tooltipEl.style.maxWidth = '200px';
+            tooltipEl.style.border = '1px solid rgba(255,255,255,0.1)';
+            document.body.appendChild(tooltipEl);
+          }
+
+          const tooltipModel = context.tooltip;
+          
+          if (tooltipModel.opacity === 0) {
+            tooltipEl.style.opacity = '0';
+            return;
+          }
+
+          if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+            const dataIndex = tooltipModel.dataPoints[0].dataIndex;
+            const member = teamPerformance?.salesTeam?.[dataIndex];
+
+            if (member) {
+              let innerHTML = `
+                <div style="margin-bottom: 8px; font-weight: bold; font-size: 14px; text-align: center;">
+                  ${member._id || 'Unknown'}
+                </div>
+                <div style="height: 1px; background: rgba(255,255,255,0.2); margin: 8px 0;"></div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="width: 10px; height: 10px; background: #2563eb; border-radius: 2px;"></div>
+                      <span style="font-size: 12px;">Total</span>
+                    </div>
+                    <span style="font-weight: bold; font-size: 12px;">${member.totalEnquiries || 0}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="width: 10px; height: 10px; background: #10b981; border-radius: 2px;"></div>
+                      <span style="font-size: 12px;">Open</span>
+                    </div>
+                    <span style="font-weight: bold; font-size: 12px;">${member.open || 0}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="width: 10px; height: 10px; background: #ef4444; border-radius: 2px;"></div>
+                      <span style="font-size: 12px;">Closed</span>
+                    </div>
+                    <span style="font-weight: bold; font-size: 12px;">${member.closed || 0}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="width: 10px; height: 10px; background: #f59e0b; border-radius: 2px;"></div>
+                      <span style="font-size: 12px;">Quoted</span>
+                    </div>
+                    <span style="font-weight: bold; font-size: 12px;">${member.quoted || 0}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="width: 10px; height: 10px; background: #8b5cf6; border-radius: 2px;"></div>
+                      <span style="font-size: 12px;">Regretted</span>
+                    </div>
+                    <span style="font-weight: bold; font-size: 12px;">${member.regretted || 0}</span>
+                  </div>
+                </div>
+              `;
+              tooltipEl.innerHTML = innerHTML;
+            }
+
+            const position = context.chart.canvas.getBoundingClientRect();
+            tooltipEl.style.opacity = '1';
+            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+          }
+        }
+      }
+    }
+  };
+
+  const rndTeamBarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {
+      mode: 'nearest',
+      intersect: true,
+    },
+    onClick: (event, elements) => {
+      if (elements.length > 0) {
+        const index = elements[0].index;
+        const memberName = teamPerformance?.rndTeam?.[index]?._id;
+        if (memberName) {
+          console.log('📊 Chart clicked, member:', memberName);
+          handleMemberClick(memberName);
+        }
+      }
+    },
+    scales: {
+      y: {
+        beginAtZero: true,
+        grid: { 
+          color: 'rgba(0,0,0,0.04)',
+          drawBorder: false,
+        },
+        ticks: { 
+          font: { size: 11, family: 'Inter' },
+          padding: 10,
+        },
+        border: { display: false }
+      },
+      x: {
         grid: { display: false },
         ticks: { 
           font: { size: 11, family: 'Inter' },
@@ -338,6 +630,115 @@ const Dashboard = () => {
       bar: {
         borderRadius: 8,
         borderSkipped: false,
+      }
+    },
+    barThickness: 60,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          usePointStyle: true,
+          padding: 15,
+          font: { size: 12, weight: '600', family: 'Inter' },
+          boxWidth: 10,
+          boxHeight: 10,
+        }
+      },
+      tooltip: {
+        enabled: false,
+        external: function(context) {
+          let tooltipEl = document.getElementById('chartjs-tooltip-rnd');
+          
+          if (!tooltipEl) {
+            tooltipEl = document.createElement('div');
+            tooltipEl.id = 'chartjs-tooltip-rnd';
+            tooltipEl.style.background = 'rgba(0, 0, 0, 0.95)';
+            tooltipEl.style.borderRadius = '12px';
+            tooltipEl.style.color = 'white';
+            tooltipEl.style.opacity = '0';
+            tooltipEl.style.pointerEvents = 'none';
+            tooltipEl.style.position = 'absolute';
+            tooltipEl.style.transform = 'translate(-50%, -110%)';
+            tooltipEl.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+            tooltipEl.style.padding = '12px 16px';
+            tooltipEl.style.fontSize = '13px';
+            tooltipEl.style.fontFamily = 'Inter, sans-serif';
+            tooltipEl.style.zIndex = '9999';
+            tooltipEl.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
+            tooltipEl.style.minWidth = '220px';
+            tooltipEl.style.maxWidth = '220px';
+            tooltipEl.style.border = '1px solid rgba(255,255,255,0.1)';
+            document.body.appendChild(tooltipEl);
+          }
+
+          const tooltipModel = context.tooltip;
+          
+          if (tooltipModel.opacity === 0) {
+            tooltipEl.style.opacity = '0';
+            return;
+          }
+
+          if (tooltipModel.dataPoints && tooltipModel.dataPoints.length > 0) {
+            const dataIndex = tooltipModel.dataPoints[0].dataIndex;
+            const member = teamPerformance?.rndTeam?.[dataIndex];
+
+            if (member) {
+              let innerHTML = `
+                <div style="margin-bottom: 8px; font-weight: bold; font-size: 14px; text-align: center;">
+                  ${member._id || 'Unknown'}
+                </div>
+                <div style="height: 1px; background: rgba(255,255,255,0.2); margin: 8px 0;"></div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <div style="width: 10px; height: 10px; background: #f59e0b; border-radius: 2px;"></div>
+                    <span style="font-size: 12px;">Enquiries Handled</span>
+                  </div>
+                  <span style="font-weight: bold; font-size: 12px;">${member.totalEnquiries || 0}</span>
+                </div>
+                <div style="height: 1px; background: rgba(255,255,255,0.15); margin: 8px 0;"></div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="width: 10px; height: 10px; background: #10b981; border-radius: 2px;"></div>
+                      <span style="font-size: 12px;">Open</span>
+                    </div>
+                    <span style="font-weight: bold; font-size: 12px;">${member.open || 0}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="width: 10px; height: 10px; background: #ef4444; border-radius: 2px;"></div>
+                      <span style="font-size: 12px;">Closed</span>
+                    </div>
+                    <span style="font-weight: bold; font-size: 12px;">${member.closed || 0}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="width: 10px; height: 10px; background: #f59e0b; border-radius: 2px;"></div>
+                      <span style="font-size: 12px;">Quoted</span>
+                    </div>
+                    <span style="font-weight: bold; font-size: 12px;">${member.quoted || 0}</span>
+                  </div>
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <div style="width: 10px; height: 10px; background: #8b5cf6; border-radius: 2px;"></div>
+                      <span style="font-size: 12px;">Regretted</span>
+                    </div>
+                    <span style="font-weight: bold; font-size: 12px;">${member.regretted || 0}</span>
+                  </div>
+                </div>
+                <div style="margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.15); text-align: center;">
+                  <span style="font-size: 11px; color: #10b981;">🔍 Click to view monthly breakdown</span>
+                </div>
+              `;
+              tooltipEl.innerHTML = innerHTML;
+            }
+
+            const position = context.chart.canvas.getBoundingClientRect();
+            tooltipEl.style.opacity = '1';
+            tooltipEl.style.left = position.left + window.pageXOffset + tooltipModel.caretX + 'px';
+            tooltipEl.style.top = position.top + window.pageYOffset + tooltipModel.caretY + 'px';
+          }
+        }
       }
     }
   };
@@ -358,7 +759,7 @@ const Dashboard = () => {
               return data.labels.map((label, i) => {
                 const value = data.datasets[0].data[i];
                 const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
-                const percentage = ((value / total) * 100).toFixed(1);
+                const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
                 return {
                   text: `${label}: ${value} (${percentage}%)`,
                   fillStyle: data.datasets[0].backgroundColor[i],
@@ -380,7 +781,7 @@ const Dashboard = () => {
             const label = context.label || '';
             const value = context.parsed;
             const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percentage = ((value / total) * 100).toFixed(1);
+            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
             return `${label}: ${value} (${percentage}%)`;
           }
         }
@@ -389,167 +790,265 @@ const Dashboard = () => {
     cutout: '70%',
   };
 
-  // Chart 2: Monthly Enquiry Trends (Line Chart)
-  const monthlyTrendData = {
-    labels: trendAnalysis?.map(item => {
-      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-      return `${monthNames[item._id.month - 1]} ${item._id.year}`;
-    }) || [],
-    datasets: [
-      {
-        label: 'Total Enquiries',
-        data: trendAnalysis?.map(item => item.totalEnquiries) || [],
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        fill: true,
-        pointBackgroundColor: '#3b82f6',
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-      },
-      {
-        label: 'Quoted',
-        data: trendAnalysis?.map(item => item.quoted) || [],
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        fill: true,
-        pointBackgroundColor: '#10b981',
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-      },
-      {
-        label: 'Regretted',
-        data: trendAnalysis?.map(item => item.regretted) || [],
-        borderColor: '#ef4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        fill: true,
-        pointBackgroundColor: '#ef4444',
-        pointBorderColor: '#fff',
-        pointBorderWidth: 2,
-      }
-    ]
-  };
-
-  // Chart 3: Sales Team Performance (Horizontal Bar Chart)
-  const salesTeamData = {
-    labels: teamPerformance?.salesTeam?.slice(0, 10).map(item => item._id) || [],
-    datasets: [{
+  // ============= CHART DATA (KEEP YOUR EXISTING CODE) =============
+  // ============= CHART DATA WITH NULL SAFETY =============
+const monthlyTrendData = trendAnalysis && trendAnalysis.length > 0 ? {
+  labels: trendAnalysis.map(item => {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${monthNames[item._id.month - 1]} ${item._id.year}`;
+  }),
+  datasets: [
+    {
       label: 'Total Enquiries',
-      data: teamPerformance?.salesTeam?.slice(0, 10).map(item => item.totalEnquiries) || [],
-      backgroundColor: [
-        '#3b82f6',
-        '#10b981',
-        '#f59e0b',
-        '#8b5cf6',
-        '#ec4899',
-        '#0ea5e9',
-        '#22c55e',
-        '#fb923c',
-        '#a855f7',
-        '#f43f5e',
-      ],
-      borderWidth: 0,
-    }]
-  };
+      data: trendAnalysis.map(item => item.totalEnquiries || 0),
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      fill: true,
+      pointBackgroundColor: '#3b82f6',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+    },
+    {
+      label: 'Quoted',
+      data: trendAnalysis.map(item => item.quoted || 0),
+      borderColor: '#10b981',
+      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+      fill: true,
+      pointBackgroundColor: '#10b981',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+    },
+    {
+      label: 'Regretted',
+      data: trendAnalysis.map(item => item.regretted || 0),
+      borderColor: '#ef4444',
+      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+      fill: true,
+      pointBackgroundColor: '#ef4444',
+      pointBorderColor: '#fff',
+      pointBorderWidth: 2,
+    }
+  ]
+} : {
+  labels: [],
+  datasets: []
+};
 
-  // Chart 4: R&D Team Performance (Vertical Bar Chart)
-  const rndTeamData = {
-    labels: teamPerformance?.rndTeam?.map(item => item._id) || [],
-    datasets: [{
-      label: 'Enquiries Handled',
-      data: teamPerformance?.rndTeam?.map(item => item.totalEnquiries) || [],
+const salesTeamData = teamPerformance?.salesTeam && teamPerformance.salesTeam.length > 0 ? {
+  labels: teamPerformance.salesTeam.slice(0, 10).map(item => item._id || 'Unknown'),
+  datasets: [
+    {
+      label: 'Total',
+      data: teamPerformance.salesTeam.slice(0, 10).map(item => item.totalEnquiries || 0),
+      backgroundColor: '#2563eb',
+      borderRadius: 6,
+      barThickness: 18,
+    },
+    {
+      label: 'Open',
+      data: teamPerformance.salesTeam.slice(0, 10).map(item => item.open || 0),
+      backgroundColor: '#10b981',
+      borderRadius: 6,
+      barThickness: 18,
+    },
+    {
+      label: 'Closed',
+      data: teamPerformance.salesTeam.slice(0, 10).map(item => item.closed || 0),
+      backgroundColor: '#ef4444',
+      borderRadius: 6,
+      barThickness: 18,
+    },
+    {
+      label: 'Quoted',
+      data: teamPerformance.salesTeam.slice(0, 10).map(item => item.quoted || 0),
       backgroundColor: '#f59e0b',
-      borderWidth: 0,
-    }]
-  };
+      borderRadius: 6,
+      barThickness: 18,
+    },
+    {
+      label: 'Regretted',
+      data: teamPerformance.salesTeam.slice(0, 10).map(item => item.regretted || 0),
+      backgroundColor: '#8b5cf6',
+      borderRadius: 6,
+      barThickness: 18,
+    },
+  ]
+} : {
+  labels: [],
+  datasets: []
+};
 
-  // Chart 5: Activity Status Distribution (Doughnut Chart)
-  const activityDistributionData = {
-    labels: activityDistribution?.map(item => item._id) || [],
-    datasets: [{
-      data: activityDistribution?.map(item => item.count) || [],
-      backgroundColor: [
-        '#10b981', // Quoted - Green
-        '#ef4444', // Regretted - Red
-        '#3b82f6', // In Progress - Blue
-        '#f59e0b', // On Hold - Yellow
-      ],
-      borderWidth: 0,
-      hoverOffset: 15,
-    }]
-  };
+const rndTeamData = teamPerformance?.rndTeam && teamPerformance.rndTeam.length > 0 ? {
+  labels: teamPerformance.rndTeam.map(item => item._id || 'Unknown'),
+  datasets: [{
+    label: 'Enquiries Handled',
+    data: teamPerformance.rndTeam.map(item => item.totalEnquiries || 0),
+    backgroundColor: '#f59e0b',
+    borderWidth: 0,
+  }]
+} : {
+  labels: [],
+  datasets: []
+};
 
-  // Chart 6: Market Distribution (Pie Chart)
-  const marketDistributionData = {
-    labels: ['Domestic', 'Export'],
-    datasets: [{
-      data: [
-        stats?.marketDistribution?.domestic || 0,
-        stats?.marketDistribution?.export || 0
-      ],
-      backgroundColor: [
-        '#3b82f6', // Domestic - Blue
-        '#10b981', // Export - Green
-      ],
-      borderWidth: 0,
-      hoverOffset: 15,
-    }]
-  };
+const memberMonthlyChartData = memberMonthlyData?.monthlyPerformance && memberMonthlyData.monthlyPerformance.length > 0 ? {
+  labels: memberMonthlyData.monthlyPerformance.map(item => {
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${monthNames[item.monthNumber - 1]} ${item.year}`;
+  }),
+  datasets: [
+    {
+      label: 'Total',
+      data: memberMonthlyData.monthlyPerformance.map(item => item.total),
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59, 130, 246, 0.1)',
+      fill: true,
+      tension: 0.4,
+    },
+    {
+      label: 'Quoted',
+      data: memberMonthlyData.monthlyPerformance.map(item => item.quoted),
+      borderColor: '#10b981',
+      backgroundColor: 'rgba(16, 185, 129, 0.1)',
+      fill: true,
+      tension: 0.4,
+    },
+    {
+      label: 'Regretted',
+      data: memberMonthlyData.monthlyPerformance.map(item => item.regretted),
+      borderColor: '#ef4444',
+      backgroundColor: 'rgba(239, 68, 68, 0.1)',
+      fill: true,
+      tension: 0.4,
+    }
+  ]
+} : null;
 
-  // Chart 8: Product Type Distribution (Bar Chart)
-  const productTypeData = {
-    labels: productDistribution?.map(item => item._id || 'Unknown') || [],
-    datasets: [{
-      label: 'Product Type Count',
-      data: productDistribution?.map(item => item.count) || [],
-      backgroundColor: [
-        '#3b82f6',
-        '#10b981',
-        '#f59e0b',
-        '#8b5cf6',
-      ],
-      borderRadius: 8,
-      borderWidth: 0,
-    }]
-  };
+const activityDistributionData = activityDistribution && activityDistribution.length > 0 ? {
+  labels: activityDistribution.map(item => item._id || 'Unknown'),
+  datasets: [{
+    data: activityDistribution.map(item => item.count || 0),
+    backgroundColor: [
+      '#10b981',
+      '#ef4444',
+      '#3b82f6',
+      '#f59e0b',
+    ],
+    borderWidth: 0,
+    hoverOffset: 15,
+  }]
+} : {
+  labels: [],
+  datasets: []
+};
 
-  // Chart 9: Fulfillment Time Analysis (Histogram)
-  const fulfillmentTimeData = {
-    labels: ['0-1 days', '1-3 days', '3-5 days', '5-10 days', '10+ days'],
-    datasets: [{
-      label: 'Frequency',
-      data: fulfillmentAnalysis?.map(item => item.count) || [0, 0, 0, 0, 0],
-      backgroundColor: [
-        '#10b981', // Fast - Green
-        '#3b82f6', // Good - Blue
-        '#f59e0b', // OK - Amber
-        '#ef4444', // Delayed - Red
-        '#8b5cf6', // Very Delayed - Purple
-      ],
-      borderRadius: 8,
-      borderWidth: 0,
-    }]
-  };
+const marketDistributionData = stats ? {
+  labels: ['Domestic', 'Export'],
+  datasets: [{
+    data: [
+      stats.marketDistribution?.domestic || 0,
+      stats.marketDistribution?.export || 0
+    ],
+    backgroundColor: [
+      '#3b82f6',
+      '#10b981',
+    ],
+    borderWidth: 0,
+    hoverOffset: 15,
+  }]
+} : {
+  labels: [],
+  datasets: []
+};
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-        <Box sx={{ textAlign: 'center' }}>
-          <CircularProgress size={60} thickness={4} />
-          <Typography variant="h6" sx={{ mt: 3, color: 'text.secondary' }}>
-            Loading Dashboard...
-          </Typography>
-        </Box>
+const productTypeData = productDistribution && productDistribution.length > 0 ? {
+  labels: productDistribution.map(item => item._id || 'Unknown'),
+  datasets: [{
+    label: 'Product Type Count',
+    data: productDistribution.map(item => item.count || 0),
+    backgroundColor: [
+      '#3b82f6',
+      '#10b981',
+      '#f59e0b',
+      '#8b5cf6',
+    ],
+    borderRadius: 8,
+    borderWidth: 0,
+  }]
+} : {
+  labels: [],
+  datasets: []
+};
+
+const fulfillmentTimeData = fulfillmentAnalysis && fulfillmentAnalysis.length > 0 ? {
+  labels: ['0-1 days', '1-3 days', '3-5 days', '5-10 days', '10+ days'],
+  datasets: [{
+    label: 'Frequency',
+    data: fulfillmentAnalysis.map(item => item.count || 0),
+    backgroundColor: [
+      '#10b981',
+      '#3b82f6',
+      '#f59e0b',
+      '#ef4444',
+      '#8b5cf6',
+    ],
+    borderRadius: 8,
+    borderWidth: 0,
+  }]
+} : {
+  labels: [],
+  datasets: [{
+    label: 'Frequency',
+    data: [0, 0, 0, 0, 0],
+    backgroundColor: [
+      '#10b981',
+      '#3b82f6',
+      '#f59e0b',
+      '#ef4444',
+      '#8b5cf6',      
+    ],
+    borderRadius: 8,
+    borderWidth: 0,
+  }]
+};
+ // ============= ENHANCED LOADING STATE =============
+if (loading || !stats || !teamPerformance || !trendAnalysis || !activityDistribution || !productDistribution || !fulfillmentAnalysis || !marketAnalysis) {
+  return (
+    <Box sx={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      minHeight: '100vh',
+      background: 'linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%)',
+    }}>
+      <Box sx={{ textAlign: 'center' }}>
+        <CircularProgress size={60} thickness={4} sx={{ color: '#667eea' }} />
+        <Typography variant="h6" sx={{ mt: 3, color: 'text.secondary', fontWeight: 600 }}>
+          {loading ? 'Loading Dashboard...' : 'Initializing Data...'}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+          {isRefreshing ? '🔄 Refreshing real-time data...' : 'Fetching all dashboard metrics...'}
+        </Typography>
+        {autoRefresh && (
+          <Chip 
+            label={`Auto-refresh: ${refreshInterval}s`} 
+            color="success" 
+            size="small" 
+            sx={{ mt: 2 }}
+          />
+        )}
       </Box>
-    );
-  }
-
+    </Box>
+  );
+}
+  // ============= MAIN RENDER =============
   return (
     <Box sx={{ 
       minHeight: '100vh',
       background: 'linear-gradient(to bottom, #f8fafc 0%, #f1f5f9 100%)',
       p: 3
     }}>
-      {/* Header Section */}
+      {/* ============= NEW: ENHANCED HEADER WITH REAL-TIME CONTROLS ============= */}
       <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Typography 
@@ -570,21 +1069,129 @@ const Dashboard = () => {
                 p: 1.5,
                 borderRadius: 2,
                 display: 'flex',
-                boxShadow: '0 4px 14px rgba(102, 126, 234, 0.4)'
+                boxShadow: '0 4px 14px rgba(102, 126, 234, 0.4)',
+                position: 'relative',
+                '&::after': autoRefresh ? {
+                  content: '""',
+                  position: 'absolute',
+                  top: -2,
+                  right: -2,
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  backgroundColor: '#10b981',
+                  animation: 'pulse 2s infinite',
+                } : {}
               }}
             >
               <Assessment sx={{ fontSize: 32, color: 'white' }} />
             </Box>
             Sales Enquiry Dashboard
+            {isRefreshing && (
+              <CircularProgress size={20} sx={{ color: '#667eea' }} />
+            )}
           </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ fontSize: '1rem', fontWeight: 500 }}>
-            Real-time insights and performance metrics
+          <Typography variant="body1" color="text.secondary" sx={{ fontSize: '1rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Box
+              component="span"
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.5,
+                px: 1,
+                py: 0.5,
+                borderRadius: 1,
+                backgroundColor: autoRefresh ? '#10b98115' : '#ef444415',
+                color: autoRefresh ? '#10b981' : '#ef4444',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+              }}
+            >
+              <Box
+                component="span"
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: autoRefresh ? '#10b981' : '#ef4444',
+                  animation: autoRefresh ? 'pulse 2s infinite' : 'none',
+                }}
+              />
+              {autoRefresh ? 'LIVE' : 'PAUSED'}
+            </Box>
+            Real-time insights • Last updated: {getTimeAgo(lastUpdated)}
           </Typography>
         </Box>
-        <Stack direction="row" spacing={2}>
-          <Tooltip title="Refresh Data">
+        
+        {/* Real-Time Controls */}
+        <Stack direction="row" spacing={1} alignItems="center">
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel>Auto-Refresh</InputLabel>
+            <Select
+              value={autoRefresh ? refreshInterval : 0}
+              label="Auto-Refresh"
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === 0) {
+                  setAutoRefresh(false);
+                  toast.info('Auto-refresh disabled');
+                } else {
+                  setAutoRefresh(true);
+                  setRefreshInterval(value);
+                  toast.success(`Auto-refresh: every ${value}s`);
+                }
+              }}
+              sx={{
+                backgroundColor: 'white',
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: autoRefresh ? '#10b981' : undefined,
+                  borderWidth: autoRefresh ? 2 : 1,
+                }
+              }}
+            >
+              <MenuItem value={0}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Cancel sx={{ fontSize: 16, color: '#ef4444' }} />
+                  Off
+                </Box>
+              </MenuItem>
+              <MenuItem value={10}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Refresh sx={{ fontSize: 16, color: '#10b981' }} />
+                  10 sec
+                </Box>
+              </MenuItem>
+              <MenuItem value={30}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Refresh sx={{ fontSize: 16, color: '#10b981' }} />
+                  30 sec
+                </Box>
+              </MenuItem>
+              <MenuItem value={60}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Refresh sx={{ fontSize: 16, color: '#10b981' }} />
+                  1 min
+                </Box>
+              </MenuItem>
+              <MenuItem value={120}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Refresh sx={{ fontSize: 16, color: '#10b981' }} />
+                  2 min
+                </Box>
+              </MenuItem>
+              <MenuItem value={300}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Refresh sx={{ fontSize: 16, color: '#10b981' }} />
+                  5 min
+                </Box>
+              </MenuItem>
+            </Select>
+          </FormControl>
+
+          <Tooltip title={`Last updated: ${lastUpdated.toLocaleTimeString()}`}>
             <IconButton 
-              onClick={fetchAllData}
+              onClick={handleForceRefresh}
+              disabled={isRefreshing}
               sx={{ 
                 background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: 'white',
@@ -594,15 +1201,51 @@ const Dashboard = () => {
                   transform: 'translateY(-2px)',
                   boxShadow: '0 6px 20px rgba(102, 126, 234, 0.5)'
                 },
+                '&.Mui-disabled': {
+                  opacity: 0.6,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                },
                 transition: 'all 0.3s ease'
               }}
             >
-              <Refresh />
+              {isRefreshing ? (
+                <CircularProgress size={24} sx={{ color: 'white' }} />
+              ) : (
+                <Refresh />
+              )}
             </IconButton>
           </Tooltip>
+
+          {autoRefresh && (
+            <Chip
+              icon={<Refresh />}
+              label={`${refreshInterval}s`}
+              color="success"
+              size="small"
+              sx={{
+                fontWeight: 600,
+                animation: 'pulse 2s infinite',
+              }}
+            />
+          )}
         </Stack>
       </Box>
 
+      {/* CSS Animation */}
+      <style jsx global>{`
+        @keyframes pulse {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.7;
+            transform: scale(1.05);
+          }
+        }
+      `}</style>
+
+      {/* ============= KEEP ALL YOUR EXISTING DASHBOARD SECTIONS ============= */}
       {/* Date Filter Section */}
       <Paper 
         sx={{ 
@@ -694,8 +1337,9 @@ const Dashboard = () => {
           </Stack>
         </LocalizationProvider>
       </Paper>
-      
-      {/* Chart 1: Statistics Cards */}
+
+       {/* ============= CONTINUE WITH ALL YOUR EXISTING SECTIONS ============= */}
+ {/* Statistics Cards */}
       <Grid container spacing={3} sx={{ mb: 2 }}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
@@ -735,7 +1379,7 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      {/* Chart 7: Team Performance Metrics (KPI Cards) */}
+      {/* Team Performance Metrics */}
       <Grid container spacing={3} sx={{ mb: 2 }}>
         <Grid item xs={12}>
           <Paper 
@@ -843,7 +1487,7 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      {/* Chart 2: Monthly Enquiry Trends */}
+      {/* Monthly Enquiry Trends */}
       <Grid container spacing={3} sx={{ mb: 3 }}>
         <Grid item xs={12}>
           <Paper 
@@ -877,7 +1521,7 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      {/* Charts 3 & 4: Team Performance */}
+      {/* Team Performance Charts */}
       <Grid container spacing={3} sx={{ mb: 2 }}>
         <Grid item xs={12} md={6}>
           <Paper 
@@ -900,12 +1544,12 @@ const Dashboard = () => {
                   Sales Team Performance
                 </Typography>
                 <Typography variant="caption" color="textSecondary">
-                  Top 10 performing sales members
+                  Top 10 performing sales members - Hover to see details
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ height: 200 }}>
-              <Bar data={salesTeamData} options={horizontalBarOptions} />
+            <Box sx={{ height: 350 }}>
+              <Bar data={salesTeamData} options={salesTeamHorizontalBarOptions} />
             </Box>
           </Paper>
         </Grid>
@@ -931,18 +1575,18 @@ const Dashboard = () => {
                   R&D Team Performance
                 </Typography>
                 <Typography variant="caption" color="textSecondary">
-                  Technical team workload distribution
+                  🔍 Click on any bar to see monthly breakdown
                 </Typography>
               </Box>
             </Box>
-            <Box sx={{ height: 200 }}>
-              <Bar data={rndTeamData} options={barChartOptions} />
+            <Box sx={{ height: 350, cursor: 'pointer' }}>
+              <Bar data={rndTeamData} options={rndTeamBarOptions} />
             </Box>
           </Paper>
         </Grid>
       </Grid>
 
-      {/* Charts 5 & 6: Distribution Charts */}
+      {/* Distribution Charts */}
       <Grid container spacing={3} sx={{ mb: 2 }}>
         <Grid item xs={12} md={6}>
           <Paper 
@@ -1010,7 +1654,7 @@ const Dashboard = () => {
         </Grid>
       </Grid>
 
-      {/* Charts 8 & 9: Product & Fulfillment Analysis */}
+      {/* Product & Fulfillment Analysis */}
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
           <Paper 
@@ -1074,8 +1718,259 @@ const Dashboard = () => {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* ===== DRILLDOWN MODAL ===== */}
+      <Dialog
+        open={drilldownOpen}
+        onClose={handleCloseDrilldown}   
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+            maxHeight: '90vh',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          pb: 2
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <TrendingUp sx={{ fontSize: 28 }} />
+            <Box>
+              <Typography variant="h6" fontWeight="bold">
+                {selectedMember} - Monthly Performance Breakdown
+              </Typography>
+              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                Detailed month-by-month enquiry tracking
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton onClick={handleCloseDrilldown} sx={{ color: 'white' }}>
+            <Close />
+          </IconButton>
+        </DialogTitle>
+
+        <DialogContent sx={{ pt: 3 }}>
+          {drilldownLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+              <Box sx={{ textAlign: 'center' }}>
+                <CircularProgress size={60} />
+                <Typography variant="body1" sx={{ mt: 2, color: 'text.secondary' }}>
+                  Loading monthly performance data...
+                </Typography>
+              </Box>
+            </Box>
+          ) : memberMonthlyData && memberMonthlyData.monthlyPerformance && memberMonthlyData.monthlyPerformance.length > 0 ? (
+            <>
+             {/* Summary Cards with Enhanced Metrics - ALL 5 METRICS */}
+<Grid container spacing={2} sx={{ mb: 3 }}>
+  <Grid item xs={6} sm={4} md={2.4}>
+    <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#2563eb15', borderRadius: 2 }}>
+      <Typography variant="caption" color="textSecondary" fontWeight={600}>
+        Total Enquiries
+      </Typography>
+      <Typography variant="h4" sx={{ fontWeight: 800, color: '#2563eb', mt: 0.5 }}>  
+        {memberMonthlyData.summary.totalEnquiries}
+      </Typography>
+    </Paper>
+  </Grid>
+  
+  <Grid item xs={6} sm={4} md={2.4}>
+    <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#10b98115', borderRadius: 2 }}>
+      <Typography variant="caption" color="textSecondary" fontWeight={600}>
+        Open
+      </Typography>
+      <Typography variant="h4" sx={{ fontWeight: 800, color: '#10b981', mt: 0.5 }}>
+        {memberMonthlyData.summary.totalOpen}
+      </Typography>
+    </Paper>
+  </Grid>
+  
+  {/* ADDED: Closed Card */}
+  <Grid item xs={6} sm={4} md={2.4}>
+    <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#6366f115', borderRadius: 2 }}>
+      <Typography variant="caption" color="textSecondary" fontWeight={600}>
+        Closed
+      </Typography>
+      <Typography variant="h4" sx={{ fontWeight: 800, color: '#6366f1', mt: 0.5 }}>
+        {memberMonthlyData.summary.totalClosed || 0}
+      </Typography>
+    </Paper>
+  </Grid>
+  
+  <Grid item xs={6} sm={4} md={2.4}>
+    <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#10b98115', borderRadius: 2 }}>
+      <Typography variant="caption" color="textSecondary" fontWeight={600}>
+        Quoted
+      </Typography>
+      <Typography variant="h4" sx={{ fontWeight: 800, color: '#10b981', mt: 0.5 }}>
+        {memberMonthlyData.summary.totalQuoted}
+      </Typography>
+    </Paper>
+  </Grid>
+  
+  <Grid item xs={6} sm={4} md={2.4}>
+    <Paper sx={{ p: 2, textAlign: 'center', backgroundColor: '#ef444415', borderRadius: 2 }}>
+      <Typography variant="caption" color="textSecondary" fontWeight={600}>
+        Regretted
+      </Typography>
+      <Typography variant="h4" sx={{ fontWeight: 800, color: '#ef4444', mt: 0.5 }}>
+        {memberMonthlyData.summary.totalRegretted}
+      </Typography>
+    </Paper>
+  </Grid>
+</Grid>
+
+{/* Performance Indicator Card */}
+<Grid container spacing={2} sx={{ mb: 3 }}>
+  <Grid item xs={12}>
+    <Paper sx={{ 
+      p: 2, 
+      textAlign: 'center', 
+      background: `linear-gradient(135deg, ${
+        memberMonthlyData.summary.successRate >= 70 ? '#10b98115' :
+        memberMonthlyData.summary.successRate >= 50 ? '#3b82f615' :
+        memberMonthlyData.summary.successRate >= 30 ? '#f59e0b15' : '#ef444415'
+      }, white)`,
+      borderRadius: 2,
+      border: `2px solid ${
+        memberMonthlyData.summary.successRate >= 70 ? '#10b981' :
+        memberMonthlyData.summary.successRate >= 50 ? '#3b82f6' :
+        memberMonthlyData.summary.successRate >= 30 ? '#f59e0b' : '#ef4444'
+      }20`
+    }}>
+      <Typography variant="caption" color="textSecondary" fontWeight={600}>
+        Performance Rating
+      </Typography>
+      <Typography variant="h3" sx={{ 
+        fontWeight: 800, 
+        color: memberMonthlyData.summary.successRate >= 70 ? '#10b981' :
+               memberMonthlyData.summary.successRate >= 50 ? '#3b82f6' :
+               memberMonthlyData.summary.successRate >= 30 ? '#f59e0b' : '#ef4444',
+        mt: 0.5,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 1
+      }}>
+        {memberMonthlyData.summary.successRate >= 70 ? '🏆 Excellent' :
+         memberMonthlyData.summary.successRate >= 50 ? '👍 Good' :
+         memberMonthlyData.summary.successRate >= 30 ? '⚠️ Average' : '📉 Needs Improvement'}
+      </Typography>
+      <Typography variant="h5" color="textSecondary" sx={{ mt: 1 }}>
+        {memberMonthlyData.summary.successRate}% Success Rate
+      </Typography>
+      <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center', gap: 3 }}>
+        <Box>
+          <Typography variant="caption" color="textSecondary">Avg/Month</Typography>
+          <Typography variant="h6" fontWeight="bold">{memberMonthlyData.summary.averagePerMonth}</Typography>
+        </Box>
+        <Box>
+          <Typography variant="caption" color="textSecondary">Months Tracked</Typography>
+          <Typography variant="h6" fontWeight="bold">{memberMonthlyData.summary.monthsTracked}</Typography>
+        </Box>
+        <Box>
+          <Typography variant="caption" color="textSecondary">Closure Rate</Typography>
+          <Typography variant="h6" fontWeight="bold">
+            {memberMonthlyData.summary.totalEnquiries > 0 
+              ? ((memberMonthlyData.summary.totalClosed / memberMonthlyData.summary.totalEnquiries) * 100).toFixed(1)
+              : 0}%
+          </Typography>
+        </Box>
+      </Box>
+    </Paper>
+  </Grid>
+</Grid>
+
+              {/* Monthly Trend Chart */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <CalendarMonth /> Monthly Trend Analysis
+                </Typography>
+                <Box sx={{ height: 300 }}>
+                  <Line data={memberMonthlyChartData} options={lineChartOptions} />
+                </Box>
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+   
+              {/* Monthly Data Table */}
+              <Box>
+                <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
+                  Monthly Breakdown Table
+                </Typography>
+                <TableContainer component={Paper} variant="outlined">
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ backgroundColor: '#f8fafc' }}>
+                        <TableCell sx={{ fontWeight: 'bold' }}>Month</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 'bold' }}>Total</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 'bold' }}>Open</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 'bold' }}>Closed</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 'bold' }}>Quoted</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 'bold' }}>Regretted</TableCell>
+                        <TableCell align="center" sx={{ fontWeight: 'bold' }}>In Progress</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {memberMonthlyData.monthlyPerformance.map((row, index) => (
+                        <TableRow key={index} hover>
+                          <TableCell>
+                            {new Date(row.year, row.monthNumber - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip label={row.total} color="primary" size="small" />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip label={row.open} sx={{ backgroundColor: '#10b98115', color: '#10b981' }} size="small" />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip label={row.closed} sx={{ backgroundColor: '#ef444415', color: '#ef4444' }} size="small" />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip label={row.quoted} sx={{ backgroundColor: '#10b98115', color: '#10b981' }} size="small" />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip label={row.regretted} sx={{ backgroundColor: '#ef444415', color: '#ef4444' }} size="small" />
+                          </TableCell>
+                          <TableCell align="center">
+                            <Chip label={row.inProgress} sx={{ backgroundColor: '#f59e0b15', color: '#f59e0b' }} size="small" />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            </>
+          ) : (
+            <Box sx={{ textAlign: 'center', py: 8 }}>
+              <CalendarMonth sx={{ fontSize: 64, color: 'text.disabled', mb: 2 }} />
+              <Typography variant="h6" color="textSecondary" gutterBottom>
+                No Monthly Data Available
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                {selectedMember} has no enquiry data for the selected period.  
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ p: 3, pt: 0 }}>
+          <Button onClick={handleCloseDrilldown} variant="outlined" size="large">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
-
+    
 export default Dashboard;
