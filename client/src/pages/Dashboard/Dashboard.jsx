@@ -180,7 +180,6 @@ const Dashboard = () => {
   const fetchAllData = useCallback(async (isAutoRefresh = false) => {
     const now = Date.now();
     if (now - lastFetchRef.current < 5000 && isAutoRefresh) {
-      console.log('⏸️ Skipping refresh - too soon');
       return;
     }
     
@@ -200,8 +199,6 @@ const Dashboard = () => {
       if (role) {
         params.role = role;
       }
-      
-      console.log('🔄 Fetching dashboard data...', isAutoRefresh ? '(Auto)' : '(Manual)');
       
       const [statsRes, teamRes, marketRes, trendRes, activityRes, productRes, fulfillmentRes] = await Promise.all([
         dashboardService.getStats(params),
@@ -223,9 +220,6 @@ const Dashboard = () => {
       setLastUpdated(new Date());
       lastFetchRef.current = now;
       
-      console.log('✅ Dashboard updated at', new Date().toLocaleTimeString());
-      
-     
     } catch (error) {
       toast.error('Failed to load dashboard data');
       console.error('❌ Dashboard fetch error:', error);
@@ -242,17 +236,13 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (autoRefresh && refreshInterval > 0) {
-      console.log(`🔄 Auto-refresh enabled: every ${refreshInterval} seconds`);
-      
       intervalRef.current = setInterval(() => {
-        console.log('⏰ Auto-refresh triggered');
         fetchAllData(true);
       }, refreshInterval * 1000);
       
       return () => {
         if (intervalRef.current) {
           clearInterval(intervalRef.current);
-          console.log('⏹️ Auto-refresh stopped');
         }
       };
     }
@@ -260,14 +250,12 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (startDate || endDate || role) {
-      console.log('🔍 Filters changed, refreshing...');
       fetchAllData(false);
     }
   }, [startDate, endDate, role, fetchAllData]);
 
   useEffect(() => {
     const handleExcelUpload = () => {
-      console.log('📊 Excel uploaded, refreshing dashboard...');
       toast.info('New data detected, refreshing dashboard...');
       setTimeout(() => fetchAllData(false), 2000);
     };
@@ -303,11 +291,7 @@ const Dashboard = () => {
         params.endDate = dayjs(endDate).format('YYYY-MM-DD');
       }
 
-      console.log('🔍 Fetching monthly data for:', memberName, 'with params:', params);
-
       const data = await dashboardService.getMemberMonthlyPerformance(memberName, params);
-      
-      console.log('✅ Monthly data received:', data);
       
       setMemberMonthlyData(data);
     } catch (error) {
@@ -319,7 +303,6 @@ const Dashboard = () => {
   };
 
   const handleMemberClick = (memberName) => {
-    console.log('👤 Member clicked:', memberName);
     setSelectedMember(memberName);
     setDrilldownOpen(true);
     fetchMemberMonthlyData(memberName);
@@ -599,7 +582,6 @@ const Dashboard = () => {
         const index = elements[0].index;
         const memberName = teamPerformance?.rndTeam?.[index]?._id;
         if (memberName) {
-          console.log('📊 Chart clicked, member:', memberName);
           handleMemberClick(memberName);
         }
       }

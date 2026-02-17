@@ -4,7 +4,6 @@ export const dashboardService = {
   getStats: async (params = {}) => {
     try {
       const response = await axios.get('/dashboard/stats', { params });
-      console.log('✅ Stats loaded:', response.data.data);
       return response.data.data;
     } catch (error) {
       console.error('❌ Stats error:', error);
@@ -15,10 +14,6 @@ export const dashboardService = {
   getTeamPerformance: async (params = {}) => {
     try {
       const response = await axios.get('/dashboard/team-performance', { params });
-      console.log('✅ Team performance loaded:', {
-        sales: response.data.data.salesTeam?.length || 0,
-        rnd: response.data.data.rndTeam?.length || 0
-      });
       return response.data.data;
     } catch (error) {
       console.error('❌ Team performance error:', error);
@@ -76,25 +71,13 @@ export const dashboardService = {
     }
   },
 
-  // Member monthly performance with detailed logging
+  // Member monthly performance
   getMemberMonthlyPerformance: async (memberName, params = {}) => {
     try {
-      console.log('🔍 Fetching monthly data for:', memberName);
-      console.log('📅 With params:', params);
-      
       const encodedName = encodeURIComponent(memberName);
       const url = `/dashboard/member-monthly/${encodedName}`;
       
-      console.log('🌐 Request URL:', url);
-      
       const response = await axios.get(url, { params });
-      
-      console.log('✅ Member monthly data received:', {
-        member: response.data.data.memberName,
-        totalInDB: response.data.data.totalEnquiriesInDB,
-        monthsFound: response.data.data.monthlyPerformance?.length || 0,
-        summary: response.data.data.summary
-      });
       
       return response.data.data;
     } catch (error) {

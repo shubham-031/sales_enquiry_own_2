@@ -38,7 +38,7 @@ const drawerWidth = 240;
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
   { text: 'Enquiries', icon: <AssignmentIcon />, path: '/enquiries' },
-  { text: 'Users', icon: <PeopleIcon />, path: '/users', roles: ['admin', 'management'] },
+  { text: 'Users', icon: <PeopleIcon />, path: '/users', roles: ['superuser'] },
   { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
   { text: 'Manage Columns', icon: <DashboardIcon />, path: '/settings/manage-columns', roles: ['superuser'] },
 ];

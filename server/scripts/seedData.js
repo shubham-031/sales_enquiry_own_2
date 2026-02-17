@@ -19,7 +19,6 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sales-
 const connectDB = async () => {
   try {
     await mongoose.connect(MONGODB_URI);
-    console.log('✅ MongoDB Connected Successfully');
   } catch (error) {
     console.error('❌ MongoDB Connection Error:', error.message);
     process.exit(1);
@@ -32,7 +31,6 @@ const createSampleUsers = async () => {
     // Check if users already exist
     const existingUsers = await User.countDocuments();
     if (existingUsers > 0) {
-      console.log('ℹ️  Users already exist, skipping user creation');
       return;
     }
 
@@ -114,7 +112,6 @@ const createSampleUsers = async () => {
     ];
 
     await User.insertMany(users);
-    console.log(`✅ Created ${users.length} sample users`);
   } catch (error) {
     console.error('❌ Error creating users:', error.message);
   }
@@ -126,7 +123,6 @@ const generateSampleEnquiries = async () => {
     // Check if enquiries already exist
     const existingEnquiries = await Enquiry.countDocuments();
     if (existingEnquiries > 0) {
-      console.log('ℹ️  Enquiries already exist, skipping enquiry creation');
       return;
     }
 
@@ -136,7 +132,6 @@ const generateSampleEnquiries = async () => {
 
     // If no role-based users, try to get all users and use them
     if (salesUsers.length === 0 || rndUsers.length === 0) {
-      console.log('⚠️  No role-based users found, using all available users...');
       const allUsers = await User.find();
       
       if (allUsers.length === 0) {
@@ -147,7 +142,6 @@ const generateSampleEnquiries = async () => {
       // Use all users as both sales and R&D
       salesUsers = allUsers;
       rndUsers = allUsers;
-      console.log(`ℹ️  Using ${allUsers.length} users for enquiry assignment`);
     }
 
     const customers = [
@@ -218,12 +212,10 @@ const generateSampleEnquiries = async () => {
     }
 
     // Save enquiries one by one to trigger pre-save hooks
-    console.log('⏳ Creating enquiries (this may take a moment)...');
     for (const enquiryData of enquiries) {
       const enquiry = new Enquiry(enquiryData);
       await enquiry.save();
     }
-    console.log(`✅ Created ${enquiries.length} sample enquiries`);
   } catch (error) {
     console.error('❌ Error creating enquiries:', error.message);
   }
@@ -232,8 +224,6 @@ const generateSampleEnquiries = async () => {
 // Main seeding function
 const seedDatabase = async () => {
   try {
-    console.log('🚀 Starting database seeding...\n');
-    
     await connectDB();
     
     // Clear existing data (optional - uncomment if needed)
@@ -243,13 +233,6 @@ const seedDatabase = async () => {
     
     await createSampleUsers();
     await generateSampleEnquiries();
-    
-    console.log('\n✨ Database seeding completed successfully!');
-    console.log('\n📝 Login Credentials:');
-    console.log('   Superuser: superuser@example.com / superuser123');
-    console.log('   Sales: rajesh@example.com / sales123');
-    console.log('   R&D: arun@example.com / rnd123');
-    console.log('   Management: suresh@example.com / mgmt123\n');
     
     process.exit(0);
   } catch (error) {

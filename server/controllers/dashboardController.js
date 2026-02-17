@@ -151,7 +151,6 @@ export const getMemberMonthlyPerformance = async (req, res, next) => {
   try {
     const { memberName } = req.params;
     const { startDate, endDate } = req.query;
-    console.log('Fetching monthly performance for:', memberName);
     
     const dateMatch = {
       rndHandlerName: memberName,
@@ -211,8 +210,6 @@ export const getMemberMonthlyPerformance = async (req, res, next) => {
       inProgress: item.inProgress,
       onHold: item.onHold || 0,
     }));
-    
-    console.log('Monthly data found:', formattedData.length, 'months');
     
     // ⭐ ENHANCED SUMMARY WITH ALL CALCULATIONS
     const totalEnquiries = formattedData.reduce((sum, item) => sum + item.total, 0);

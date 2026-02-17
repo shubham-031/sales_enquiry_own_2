@@ -29,7 +29,6 @@ export const findValueInRow = (row, ...possibleNames) => {
     if (matchingKey) {
       const value = row[matchingKey];
       if (value !== undefined && value !== null && value !== '' && value !== '-') {
-        console.log(`Fuzzy matched "${matchingKey}" to "${name}"`);
         return value;
       }
     }
@@ -128,9 +127,6 @@ export const standardizeSupplyScope = (value) => {
   if (!value || value === '-') return null;
   const str = String(value).toUpperCase().trim();
   
-  // Debug log
-  console.log(`Standardizing supply scope: "${value}" → "${str}"`);
-  
   if (str === 'IN-HOUSE' || str === 'INHOUSE' || str === 'IN HOUSE') return 'Inhouse';
   if (str === 'BO' || str === 'BROUGHTOUT' || str === 'BROUGHT OUT' || str === 'BROUGHT-OUT') return 'Broughtout';
   if (str.includes('IN-HOUSE') && str.includes('BO')) return 'Both';
@@ -139,8 +135,6 @@ export const standardizeSupplyScope = (value) => {
   if (str.includes('&')) return 'Both';
   if (str.includes('AND')) return 'Both';
   
-  // If we don't recognize it, log it
-  console.log(`⚠️ Unknown supply scope value: "${value}" (original), defaulting to null`);
   return null;
 };
 

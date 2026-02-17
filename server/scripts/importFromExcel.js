@@ -19,7 +19,6 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sales-
 const connectDB = async () => {
   try {
     await mongoose.connect(MONGODB_URI);
-    console.log('✅ MongoDB Connected Successfully');
   } catch (error) {
     console.error('❌ MongoDB Connection Error:', error.message);
     process.exit(1);
@@ -121,7 +120,6 @@ const getOrCreateUser = async (name, role) => {
       role: role || 'sales',
       department: role === 'r&d' ? 'Research & Development' : 'Sales',
     });
-    console.log(`  ✅ Created user: ${cleanName} (${role})`);
   }
   
   return user;
@@ -130,11 +128,8 @@ const getOrCreateUser = async (name, role) => {
 // Import enquiries from Excel file
 const importFromExcel = async () => {
   try {
-    console.log('\n📊 Starting Excel Import Process...\n');
-    
     // Read the Excel file
     const filePath = path.join(__dirname, '../data/SALES ENQUIRY TRACKER_Sample data_ 2025-26_VIT Project (1).xls');
-    console.log(`📁 Reading file: ${filePath}`);
     
     const workbook = XLSX.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
@@ -142,19 +137,8 @@ const importFromExcel = async () => {
     
     // Convert to JSON
     const data = XLSX.utils.sheet_to_json(worksheet);
-    console.log(`📋 Found ${data.length} rows in Excel file\n`);
-    
-    // Log column names from first row to help with mapping
-    if (data.length > 0) {
-      console.log('📝 Excel Column Names:');
-      Object.keys(data[0]).forEach((key, index) => {
-        console.log(`   ${index + 1}. "${key}"`);
-      });
-      console.log('\n');
-    }
     
     // Clear existing enquiries (optional - comment out if you want to keep existing data)
-    console.log('🗑️  Clearing existing enquiries...');
     await Enquiry.deleteMany({});
     
     let successCount = 0;
@@ -219,7 +203,6 @@ const importFromExcel = async () => {
         
         // Skip if no enquiry date (DATE RECEIVED is required)
         if (!enquiryDate) {
-          console.log(`  ⚠️  Row ${i + 1}: Skipping - Missing DATE RECEIVED`);
           errorCount++;
           continue;
         }
@@ -266,44 +249,14 @@ const importFromExcel = async () => {
         
         await Enquiry.create(enquiryData);
         
-        successCount++;
-        if ((i + 1) % 50 === 0) {
-          console.log(`  ✅ Processed ${i + 1} rows...`);
-        }
-        
+        successCount;
       } catch (error) {
         errorCount++;
         errors.push({ row: i + 1, error: error.message });
-        console.error(`  ❌ Row ${i + 1}: ${error.message}`);
       }
     }
     
-    console.log('\n' + '='.repeat(60));
-    console.log('📊 IMPORT SUMMARY');
-    console.log('='.repeat(60));
-    console.log(`✅ Successfully imported: ${successCount} enquiries`);
-    console.log(`❌ Failed: ${errorCount} rows`);
-    console.log(`📈 Total processed: ${data.length} rows`);
-    console.log('='.repeat(60) + '\n');
-    
-    if (errors.length > 0 && errors.length <= 10) {
-      console.log('❌ Error Details:');
-      errors.forEach(err => {
-        console.log(`   Row ${err.row}: ${err.error}`);
-      });
-      console.log();
-    }
-    
-    // Show sample imported data
-    const sampleEnquiries = await Enquiry.find().limit(5).populate('salesRepresentative rndHandler');
-    console.log('📋 Sample Imported Enquiries:');
-    sampleEnquiries.forEach((enq, idx) => {
-      console.log(`${idx + 1}. ${enq.enquiryNumber} - ${enq.customerName} (${enq.marketType})`);
-    });
-    console.log();
-    
   } catch (error) {
-    console.error('❌ Import Error:', error.message);
     throw error;
   }
 };
@@ -313,7 +266,6 @@ const main = async () => {
   try {
     await connectDB();
     await importFromExcel();
-    console.log('✅ Import completed successfully!\n');
     process.exit(0);
   } catch (error) {
     console.error('❌ Import failed:', error);

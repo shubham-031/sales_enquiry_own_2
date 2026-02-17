@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -22,8 +23,11 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import PersonIcon from '@mui/icons-material/Person';
 import axios from '../../utils/axios';
+import useAuthStore from '../../store/authStore';
 
 const Users = () => {
+  const navigate = useNavigate();
+  const { user: currentUser } = useAuthStore();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -40,10 +44,6 @@ const Users = () => {
     department: '',
   });
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
   const fetchUsers = async () => {
     try {
       setLoading(true);
@@ -56,6 +56,16 @@ const Users = () => {
       setLoading(false);
     }
   };
+
+  // Redirect management users
+  useEffect(() => {
+    if (currentUser?.role === 'management') {
+      navigate('/dashboard');
+      return;
+    }
+    fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, navigate]);
 
   const handleOpenDialog = (user = null) => {
     if (user) {
