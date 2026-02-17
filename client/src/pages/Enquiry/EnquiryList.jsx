@@ -152,6 +152,11 @@ const EnquiryList = () => {
   };
 
   const handleOpenImportDialog = () => {
+    // Check if user has permission to import
+    if (user?.role !== 'superuser' && user?.role !== 'sales') {
+      setError('You do not have access to import Excel files');
+      return;
+    }
     setOpenImportDialog(true);
     setSelectedFile(null);
     setImportResult(null);
@@ -521,13 +526,15 @@ const EnquiryList = () => {
           Enquiry Management
         </Typography>
         <Box display="flex" gap={2}>
-          <Button
-            variant="outlined"
-            startIcon={<UploadFileIcon />}
-            onClick={handleOpenImportDialog}
-          >
-            Import Excel
-          </Button>
+          {(user?.role === 'superuser' || user?.role === 'sales') && (
+            <Button
+              variant="outlined"
+              startIcon={<UploadFileIcon />}
+              onClick={handleOpenImportDialog}
+            >
+              Import Excel
+            </Button>
+          )}
           {(user?.role === 'superuser') && (
             <Button
               variant="outlined"
